@@ -1,6 +1,7 @@
 # Exchanging-Used-Items-Management-System
 This is an application for exchanging/donating/selling used items at financially autonomous private schools.
 # Frontend
+```
 📦 frontend-nextjs
  ┣ 📂 src
  ┃ ┣ 📂 app               # Chứa các Page (Route của ứng dụng)
@@ -33,9 +34,9 @@ This is an application for exchanging/donating/selling used items at financially
  ┃   ┗ 📜 index.ts
  ┣ 📜 tailwind.config.ts  # Cấu hình màu sắc, animation cơ bản
  ┗ 📜 package.json
-
+```
 # Backend
-
+```
 📦 backend-fastapi
  ┣ 📂 app
  ┃ ┣ 📂 api               # Chứa các Endpoints/Routers
@@ -68,3 +69,4 @@ This is an application for exchanging/donating/selling used items at financially
  ┣ 📂 alembic             # Quản lý version Database (Migration)
  ┣ 📜 requirements.txt    # Danh sách thư viện Python
  ┗ 📜 .env                # Lưu cấu hình bảo mật
+```
