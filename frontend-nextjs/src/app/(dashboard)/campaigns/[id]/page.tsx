@@ -1,0 +1,1 @@
+export default function CampaignDetailPage({ params }: { params: { id: string } }) { return <div>Campaign Detail: {params.id}</div>; }
