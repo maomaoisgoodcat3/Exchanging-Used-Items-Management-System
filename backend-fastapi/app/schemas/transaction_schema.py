@@ -5,8 +5,8 @@ from decimal import Decimal
 
 
 class TransactionBase(BaseModel):
-    post_id: int
     product_id: int
+    buyer_email: EmailStr
     quantity: int = Field(..., gt=0)
 
 
@@ -16,7 +16,6 @@ class TransactionCreate(TransactionBase):
 
 class TransactionRead(TransactionBase):
     transaction_id: int
-    buyer_email: EmailStr
     service_fee: Decimal
     order_status: str
     transaction_status: str
@@ -28,7 +27,6 @@ class TransactionRead(TransactionBase):
 
 class TransactionListRead(BaseModel):
     transaction_id: int
-    post_id: int
     product_id: int
     buyer_email: EmailStr
     quantity: int
@@ -43,7 +41,7 @@ class TransactionListRead(BaseModel):
 
 class TransactionFilter(BaseModel):
     buyer_email: Optional[EmailStr] = None
-    post_id: Optional[int] = None
+    product_id: Optional[int] = None
     order_status: Optional[str] = None
     transaction_status: Optional[str] = None
     date_from: Optional[datetime] = None
@@ -102,7 +100,6 @@ class PaymentConfirm(BaseModel):
 
 
 class CartItemBase(BaseModel):
-    post_id: int
     product_id: int
     quantity: int = Field(..., gt=0)
 

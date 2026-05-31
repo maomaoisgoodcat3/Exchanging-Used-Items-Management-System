@@ -1,326 +1,325 @@
 import logging
-from typing import Dict, Optional, Tuple
-from decimal import Decimal
+from typing import Optional, List, Dict
+from datetime import datetime
 from enum import Enum
 
 
 logger = logging.getLogger(__name__)
 
 
-class PaymentMethod(str, Enum):
-    """Payment method enumeration."""
-
-    COD = "COD"  # Cash on Delivery
-    QR = "QR"  # Bank transfer with QR
-
-
-class PaymentStatus(str, Enum):
-    """Payment status enumeration."""
+class PostStatus(str, Enum):
+    """Post status enumeration."""
 
     PENDING = "Pending"
-    DEPOSITED = "Deposited"
-    SUCCESSFUL = "Successful"
+    APPROVED = "Approved"
+    REJECTED = "Rejected"
+    SOLD = "Sold"
+    CLOSED = "Closed"
 
 
-class OrderStatus(str, Enum):
-    """Order status enumeration."""
+class PostCategory(str, Enum):
+    """Post category enumeration."""
+
+    SELLING = "Selling"
+    TRADING = "Trading"
+    DONATING = "Donating"
+
+
+class ApprovalStatus(str, Enum):
+    """Approval status enumeration."""
 
     PENDING = "Pending"
-    READY_FOR_PICKUP = "Ready for pickup"
-    SUCCESSFUL = "Successful"
+    APPROVED = "Approved"
+    REJECTED = "Rejected"
+    RESENDING = "Resending"
 
 
-class PaymentService:
+class PostService:
     """
-    Service for managing payment operations including:
-    - Service fee calculation
-    - Payment method handling
-    - Transaction amount calculation
-    - Payment validation
+    Service for managing post operations including:
+    - Post creation and modification
+    - Post approval workflow
+    - Post status transitions
+    - Product reference management
     """
 
-    def __init__(self, default_service_fee_percentage: Decimal = Decimal("5.0")):
+    @staticmethod
+    def validate_post_category(category: str) -> bool:
         """
-        Initialize payment service.
+        Validate post category.
 
         Args:
-            default_service_fee_percentage: Default service fee percentage
-        """
-        self.default_service_fee_percentage = default_service_fee_percentage
-
-    def calculate_service_fee(
-        self,
-        total_amount: Decimal,
-        service_fee_setting: Optional[Decimal] = None,
-        fee_type: str = "percentage",
-    ) -> Decimal:
-        """
-        Calculate service fee for a transaction.
-
-        Args:
-            total_amount: Total transaction amount
-            service_fee_setting: Service fee setting from Settings table (percentage or fixed amount)
-            fee_type: Type of fee ('percentage' or 'fixed')
+            category: Post category
 
         Returns:
-            Calculated service fee
+            True if valid category, False otherwise
         """
-        if service_fee_setting is None:
-            service_fee_setting = self.default_service_fee_percentage
+        return category in [c.value for c in PostCategory]
 
-        if fee_type == "percentage":
-            return (total_amount * service_fee_setting) / Decimal("100")
-        elif fee_type == "fixed":
-            return service_fee_setting
+    @staticmethod
+    def validate_post_for_campaign(post_category: str, campaign_id: Optional[int]) -> bool:
+        """
+        Validate if post can be associated with campaign.
+
+        Args:
+            post_category: Post category
+            campaign_id: Campaign ID
+
+        Returns:
+            True if valid association, False otherwise
+        """
+        if post_category == PostCategory.DONATING.value:
+            return campaign_id is not None
+        return True
+
+    @staticmethod
+    def can_edit_post(current_status: str) -> bool:
+        """
+        Check if post can be edited based on current status.
+
+        Args:
+            current_status: Current post status
+
+        Returns:
+            True if post can be edited, False otherwise
+        """
+        editable_statuses = [PostStatus.PENDING.value, PostStatus.REJECTED.value]
+        return current_status in editable_statuses
+
+    @staticmethod
+    def calculate_new_status_after_edit(current_status: str) -> str:
+        """
+        Calculate new status after post edit.
+
+        Args:
+            current_status: Current post status
+
+        Returns:
+            New status after edit
+        """
+        if current_status == PostStatus.PENDING.value:
+            return PostStatus.PENDING.value
+        elif current_status == PostStatus.REJECTED.value:
+            return ApprovalStatus.RESENDING.value
         else:
-            logger.warning(f"Unknown fee type: {fee_type}. Using percentage.")
-            return (total_amount * service_fee_setting) / Decimal("100")
+            return current_status
 
-    def calculate_seller_payout(self, total_amount: Decimal, service_fee: Decimal) -> Decimal:
+    @staticmethod
+    def validate_product_ids(product_ids: List[int]) -> bool:
         """
-        Calculate seller payout after service fee.
+        Validate product IDs from Storage table.
 
         Args:
-            total_amount: Total transaction amount
-            service_fee: Service fee
+            product_ids: List of product IDs from Storage table
 
         Returns:
-            Seller payout amount
+            True if product IDs are valid, False otherwise
         """
-        payout = total_amount - service_fee
-        return max(Decimal("0"), payout)
+        if not product_ids:
+            return False
 
-    def validate_payment_amount(self, amount: Decimal, min_amount: Decimal = Decimal("1000")) -> Tuple[bool, Optional[str]]:
+        for product_id in product_ids:
+            if not isinstance(product_id, int) or product_id <= 0:
+                return False
+
+        return True
+
+    @staticmethod
+    def validate_images(images: Optional[List[Dict]]) -> bool:
         """
-        Validate if payment amount is acceptable.
+        Validate image data.
 
         Args:
-            amount: Payment amount
-            min_amount: Minimum acceptable amount
+            images: List of image data
+
+        Returns:
+            True if all images are valid, False otherwise
+        """
+        if images is None:
+            return True
+
+        max_images = 10
+        if len(images) > max_images:
+            return False
+
+        for image in images:
+            if not isinstance(image, dict):
+                return False
+            if "image_url" not in image or not image["image_url"]:
+                return False
+
+        return True
+
+    @staticmethod
+    def handle_approval_action(current_status: str, action: str, reject_reason: Optional[str] = None) -> tuple:
+        """
+        Handle approval action and determine new status.
+
+        Args:
+            current_status: Current approval status
+            action: Action to perform (approve, reject, resend)
+            reject_reason: Reason for rejection
+
+        Returns:
+            Tuple of (new_status, is_valid, error_message)
+        """
+        valid_actions = ["approve", "reject", "resend"]
+        if action not in valid_actions:
+            return None, False, f"Invalid action. Must be one of {valid_actions}"
+
+        if action == "approve":
+            return ApprovalStatus.APPROVED.value, True, None
+        elif action == "reject":
+            if not reject_reason:
+                return None, False, "Reject reason is required for rejection"
+            return ApprovalStatus.REJECTED.value, True, None
+        elif action == "resend":
+            return ApprovalStatus.RESENDING.value, True, None
+
+    @staticmethod
+    def can_mark_as_sold(current_status: str) -> bool:
+        """
+        Check if post can be marked as sold.
+
+        Args:
+            current_status: Current post status
+
+        Returns:
+            True if post can be marked as sold, False otherwise
+        """
+        return current_status == PostStatus.APPROVED.value
+
+    @staticmethod
+    def can_close_post(current_status: str) -> bool:
+        """
+        Check if post can be closed.
+
+        Args:
+            current_status: Current post status
+
+        Returns:
+            True if post can be closed, False otherwise
+        """
+        non_closeable_statuses = [PostStatus.SOLD.value, PostStatus.CLOSED.value]
+        return current_status not in non_closeable_statuses
+
+    @staticmethod
+    def filter_posts_for_user(posts: List[Dict], role: str, include_approval_status: bool = False) -> List[Dict]:
+        """
+        Filter posts based on user role and visibility rules.
+
+        Args:
+            posts: List of posts
+            role: User role (Member or Admin)
+            include_approval_status: Whether to include approval status fields
+
+        Returns:
+            Filtered list of posts
+        """
+        filtered_posts = []
+
+        for post in posts:
+            if role == "Admin":
+                filtered_posts.append(post)
+            else:
+                if post.get("status") in [PostStatus.APPROVED.value]:
+                    post_copy = post.copy()
+                    if not include_approval_status:
+                        post_copy.pop("reviewed_by", None)
+                        post_copy.pop("reviewed_at", None)
+                        post_copy.pop("approval_status", None)
+                    filtered_posts.append(post_copy)
+
+        return filtered_posts
+
+    @staticmethod
+    def apply_post_search_filters(posts: List[Dict], search_query: str, filters: Dict) -> List[Dict]:
+        """
+        Apply search and filter logic to posts.
+
+        Args:
+            posts: List of posts
+            search_query: Search query string
+            filters: Dictionary of filter criteria
+
+        Returns:
+            Filtered list of posts
+        """
+        filtered = posts
+
+        if search_query:
+            query_lower = search_query.lower()
+            filtered = [
+                p
+                for p in filtered
+                if query_lower in p.get("title", "").lower()
+                or query_lower in p.get("post_id", "")
+                or query_lower in p.get("seller_email", "").lower()
+            ]
+
+        if filters.get("post_category"):
+            filtered = [p for p in filtered if p.get("post_category") == filters["post_category"]]
+
+        if filters.get("status"):
+            filtered = [p for p in filtered if p.get("status") == filters["status"]]
+
+        if filters.get("campaign_id"):
+            filtered = [p for p in filtered if p.get("campaign_id") == filters["campaign_id"]]
+
+        sort_by = filters.get("sort_by", "created_at")
+        sort_order = filters.get("sort_order", "desc")
+
+        reverse = sort_order == "desc"
+        filtered = sorted(
+            filtered,
+            key=lambda x: x.get(sort_by, ""),
+            reverse=reverse,
+        )
+
+        return filtered
+
+    @staticmethod
+    def validate_post_for_transaction(post: Dict, post_category: str, transaction_type: str) -> tuple:
+        """
+        Validate if post is eligible for transaction type.
+
+        Args:
+            post: Post data
+            post_category: Post category
+            transaction_type: Type of transaction (buy, trade, donate)
 
         Returns:
             Tuple of (is_valid, error_message)
         """
-        if amount <= Decimal("0"):
-            return False, "Payment amount must be greater than 0"
+        if post_category == PostCategory.SELLING.value and transaction_type != "buy":
+            return False, "Only buying transactions allowed for Selling posts"
 
-        if amount < min_amount:
-            return False, f"Payment amount must be at least {min_amount:,.0f} VND"
+        if post_category == PostCategory.TRADING.value and transaction_type != "trade":
+            return False, "Only trading transactions allowed for Trading posts"
 
-        return True, None
+        if post_category == PostCategory.DONATING.value and transaction_type != "donate":
+            return False, "Only donation transactions allowed for Donating posts"
 
-    def calculate_transaction_total(
-        self,
-        product_price: Decimal,
-        quantity: int,
-        service_fee_percentage: Optional[Decimal] = None,
-    ) -> Dict[str, Decimal]:
-        """
-        Calculate transaction totals including service fee.
-
-        Args:
-            product_price: Unit price of product
-            quantity: Quantity purchased
-            service_fee_percentage: Service fee percentage
-
-        Returns:
-            Dictionary with subtotal, service_fee, and total
-        """
-        if service_fee_percentage is None:
-            service_fee_percentage = self.default_service_fee_percentage
-
-        subtotal = product_price * Decimal(str(quantity))
-        service_fee = self.calculate_service_fee(subtotal, service_fee_percentage, fee_type="percentage")
-        total = subtotal + service_fee
-
-        return {
-            "subtotal": subtotal,
-            "service_fee": service_fee,
-            "total": total,
-            "seller_payout": self.calculate_seller_payout(subtotal, service_fee),
-        }
-
-    def handle_cod_payment(self, transaction_id: int, buyer_email: str, seller_email: str, amount: Decimal) -> Dict:
-        """
-        Handle Cash on Delivery payment.
-
-        Args:
-            transaction_id: Transaction ID
-            buyer_email: Buyer email
-            seller_email: Seller email
-            amount: Payment amount
-
-        Returns:
-            Payment confirmation data
-        """
-        return {
-            "transaction_id": transaction_id,
-            "payment_method": PaymentMethod.COD.value,
-            "status": PaymentStatus.PENDING.value,
-            "amount": amount,
-            "buyer_email": buyer_email,
-            "seller_email": seller_email,
-            "note": "Payment will be collected when item is delivered",
-        }
-
-    def handle_qr_payment(self, transaction_id: int, buyer_email: str, seller_email: str, amount: Decimal) -> Dict:
-        """
-        Handle QR code bank transfer payment.
-
-        Args:
-            transaction_id: Transaction ID
-            buyer_email: Buyer email
-            seller_email: Seller email
-            amount: Payment amount
-
-        Returns:
-            Payment confirmation data with QR code
-        """
-        return {
-            "transaction_id": transaction_id,
-            "payment_method": PaymentMethod.QR.value,
-            "status": PaymentStatus.PENDING.value,
-            "amount": amount,
-            "buyer_email": buyer_email,
-            "seller_email": seller_email,
-            "deposit_account": "School Fund Account",
-            "note": "Amount will be held by school until item is confirmed received",
-        }
-
-    def validate_refund_eligibility(
-        self,
-        order_status: str,
-        transaction_status: str,
-        days_since_purchase: int,
-        return_policy_days: int = 7,
-    ) -> Tuple[bool, Optional[str]]:
-        """
-        Validate if transaction is eligible for refund/return.
-
-        Args:
-            order_status: Current order status
-            transaction_status: Current transaction status
-            days_since_purchase: Days elapsed since purchase
-            return_policy_days: Return policy days
-
-        Returns:
-            Tuple of (is_eligible, reason)
-        """
-        if order_status != OrderStatus.SUCCESSFUL.value:
-            return False, "Order has not been successfully completed"
-
-        if transaction_status not in [PaymentStatus.SUCCESSFUL.value, PaymentStatus.DEPOSITED.value]:
-            return False, "Payment has not been completed"
-
-        if days_since_purchase > return_policy_days:
-            return False, f"Return period ({return_policy_days} days) has expired"
+        if post.get("status") != PostStatus.APPROVED.value:
+            return False, "Post is not approved for transactions"
 
         return True, None
 
-    def calculate_refund_amount(
-        self,
-        transaction_total: Decimal,
-        service_fee: Decimal,
-        refund_reason: str,
-    ) -> Decimal:
+    @staticmethod
+    def get_storage_product_info(product: Dict) -> Dict:
         """
-        Calculate refund amount based on refund reason.
+        Extract relevant product information from Storage product.
 
         Args:
-            transaction_total: Original transaction total
-            service_fee: Original service fee
-            refund_reason: Reason for refund
+            product: Storage product data
 
         Returns:
-            Refund amount
+            Product info for display
         """
-        if refund_reason.lower() in ["damaged", "defective", "not as described"]:
-            return transaction_total - service_fee
-        elif refund_reason.lower() == "buyer_request":
-            return transaction_total - service_fee
-        elif refund_reason.lower() == "seller_unable":
-            return transaction_total
-        else:
-            return transaction_total - service_fee
-
-    def update_service_fee_setting(
-        self,
-        setting_value: Decimal,
-        fee_type: str = "percentage",
-        min_value: Decimal = Decimal("0"),
-        max_value: Optional[Decimal] = None,
-    ) -> Tuple[bool, Optional[str]]:
-        """
-        Validate and update service fee setting.
-
-        Args:
-            setting_value: New setting value
-            fee_type: Type of fee
-            min_value: Minimum allowed value
-            max_value: Maximum allowed value
-
-        Returns:
-            Tuple of (is_valid, error_message)
-        """
-        if setting_value < min_value:
-            return False, f"Setting value must be at least {min_value}"
-
-        if max_value and setting_value > max_value:
-            return False, f"Setting value cannot exceed {max_value}"
-
-        if fee_type == "percentage" and (setting_value < Decimal("0") or setting_value > Decimal("100")):
-            return False, "Percentage must be between 0 and 100"
-
-        return True, None
-
-    def calculate_bulk_transaction_fees(self, transactions: list[Dict]) -> Dict:
-        """
-        Calculate fees for multiple transactions.
-
-        Args:
-            transactions: List of transaction data
-
-        Returns:
-            Summary of fees and totals
-        """
-        total_revenue = Decimal("0")
-        total_service_fees = Decimal("0")
-        total_seller_payouts = Decimal("0")
-
-        for transaction in transactions:
-            amount = transaction.get("amount", Decimal("0"))
-            total_revenue += amount
-
-            fees = self.calculate_transaction_total(
-                amount,
-                1,
-                transaction.get("service_fee_percentage", self.default_service_fee_percentage),
-            )
-            total_service_fees += fees["service_fee"]
-            total_seller_payouts += fees["seller_payout"]
-
         return {
-            "transaction_count": len(transactions),
-            "total_revenue": total_revenue,
-            "total_service_fees": total_service_fees,
-            "total_seller_payouts": total_seller_payouts,
-            "average_service_fee": (
-                total_service_fees / Decimal(len(transactions)) if transactions else Decimal("0")
-            ),
+            "product_id": product.get("product_id"),
+            "product_name": product.get("product_name"),
+            "product_category_id": product.get("product_category_id"),
+            "product_quantity": product.get("product_quantity"),
+            "product_price": product.get("product_price", 0),
         }
-
-    def format_currency(self, amount: Decimal, currency: str = "VND") -> str:
-        """
-        Format amount as currency string.
-
-        Args:
-            amount: Amount to format
-            currency: Currency code
-
-        Returns:
-            Formatted currency string
-        """
-        if currency == "VND":
-            return f"{amount:,.0f} ₫"
-        else:
-            return f"{amount:,.2f} {currency}"
