@@ -2,11 +2,15 @@
 from fastapi import APIRouter, HTTPException, status, Depends, Query
 from typing import Optional, List
 from decimal import Decimal
-from schemas.post_schema import (
+from app.schemas.post_schema import (
     PostCreate, PostUpdate, PostRead, PostDetailRead, PostListRead,
     PostFilter, PostApprovalAction, PostProductCreate, PostImageCreate
 )
-
+from sqlalchemy.orm import Session
+from app.core.database import get_db
+from app.services.auth_svc import get_current_user
+from app.models.post import Post, PostProduct, PostImage
+from app.models.user import AccountUser
 router = APIRouter(prefix="/api/v1/posts", tags=["Posts"])
 
 
@@ -57,24 +61,13 @@ def list_posts(
 @router.post("/", response_model=dict, status_code=status.HTTP_201_CREATED)
 def create_post(
     data: PostCreate,
-    current_user: str = Depends()
+    db: Session = Depends(get_db), # Thêm Dependency để gọi DB
+    current_user: AccountUser = Depends(get_current_user) # Gọi hàm giải mã Token để lấy User thật
 ):
     """
     Create a new post
     
-    Database: Posts table
-    - seller_email: Current user's email
-    - post_category: Selling, Trading, or Donating
-    - title: Post title
-    - description: Detailed description
-    - campaign_id: Optional - if participating in campaign
-    - status: Default 'Pending' - needs admin approval
-    
-    - **title**: Post title
-    - **description**: Detailed description
-    - **post_category**: Category (Selling, Trading, Donating)
-    - **campaign_id**: Associated campaign ID (optional)
-    - **products**: List of storage product IDs
+    Database: Posts table (LƯU THẬT VÀO MYSQL)
     """
     if not data.title or not data.description:
         raise HTTPException(
@@ -82,14 +75,49 @@ def create_post(
             detail="Title and description are required"
         )
     
-    return {
-        "message": "Post created successfully",
-        "post_id": 1,
-        "seller_email": current_user,
-        "status": "Pending",
-        "created_at": "2024-05-31T15:39:31"
-    }
+    # 1. Tạo bảng Post chính
+    new_post = Post(
+        seller_email=current_user.user_email,
+        campaign_id=data.campaign_id,
+        title=data.title,
+        description=data.description,
+        post_type=data.post_category, 
+        approval_status="Pending",
+        open_status="Available"
+    )
+    db.add(new_post)
+    db.flush() # Đẩy tạm xuống DB để lấy post_id sinh ra tự động
 
+    # 2. Xử lý danh sách Products (Mô phỏng: tạo PostProduct từ ID giả định)
+    # LƯU Ý: Vì chưa có bảng Storage, ta tạm lưu ID sản phẩm vào bảng PostProduct
+    for prod_id in data.products:
+        new_prod = PostProduct(
+            post_id=new_post.post_id,
+            product_category_id=prod_id, # Tạm mượn cột này để lưu ID đồ vật
+            product_quantity=1
+        )
+        db.add(new_prod)
+
+    # 3. Xử lý Images (nếu có)
+    if data.images:
+        for img in data.images:
+            new_img = PostImage(
+                post_id=new_post.post_id,
+                image_url=img.image_url
+            )
+            db.add(new_img)
+
+    # 4. Commit toàn bộ thay đổi xuống MySQL
+    db.commit()
+    db.refresh(new_post)
+    
+    return {
+        "message": "Post created successfully and saved to Database!",
+        "post_id": new_post.post_id,
+        "seller_email": current_user.user_email,
+        "status": new_post.approval_status,
+        "created_at": new_post.created_at
+    }
 
 @router.get("/{post_id}", response_model=PostDetailRead)
 def get_post_detail(post_id: int):
@@ -121,7 +149,7 @@ def get_post_detail(post_id: int):
 def update_post(
     post_id: int,
     data: PostUpdate,
-    current_user: str = Depends()
+    current_user: AccountUser = Depends(get_current_user)
 ):
     """
     Update post information (owner only, if not approved)
@@ -137,7 +165,7 @@ def update_post(
 
 
 @router.delete("/{post_id}", response_model=dict)
-def delete_post(post_id: int, current_user: str = Depends()):
+def delete_post(post_id: int, current_user: AccountUser = Depends(get_current_user)):
     """
     Delete a post (owner or admin only)
     
@@ -153,7 +181,7 @@ def delete_post(post_id: int, current_user: str = Depends()):
 @router.post("/{post_id}/mark-sold", response_model=dict)
 def mark_post_sold(
     post_id: int,
-    current_user: str = Depends()
+    current_user: AccountUser = Depends(get_current_user)
 ):
     """
     Mark post as sold
@@ -173,7 +201,7 @@ def mark_post_sold(
 def approve_post(
     post_id: int,
     data: PostApprovalAction,
-    current_user: str = Depends()
+    current_user: AccountUser = Depends(get_current_user)
 ):
     """
     Approve/Reject post (admin only)
@@ -212,7 +240,7 @@ def get_post_products(post_id: int):
 def add_product_to_post(
     post_id: int,
     storage_product_ids: List[int],
-    current_user: str = Depends()
+    current_user: AccountUser = Depends(get_current_user)
 ):
     """
     Add storage products to post
@@ -231,7 +259,7 @@ def add_product_to_post(
 def remove_product_from_post(
     post_id: int,
     product_id: int,
-    current_user: str = Depends()
+    current_user: AccountUser = Depends(get_current_user)
 ):
     """
     Remove product from post
@@ -250,7 +278,7 @@ def remove_product_from_post(
 def add_image_to_post(
     post_id: int,
     data: PostImageCreate,
-    current_user: str = Depends()
+    current_user: AccountUser = Depends(get_current_user)
 ):
     """
     Add image to post
@@ -269,7 +297,7 @@ def add_image_to_post(
 def remove_image_from_post(
     post_id: int,
     image_id: int,
-    current_user: str = Depends()
+    current_user: AccountUser = Depends(get_current_user)
 ):
     """
     Remove image from post

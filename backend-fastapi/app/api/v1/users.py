@@ -1,16 +1,17 @@
 """User Management API Endpoints"""
 from fastapi import APIRouter, HTTPException, status, Depends
 from typing import Optional, List
-from schemas.user_schema import (
+from app.schemas.user_schema import (
     UserUpdate, UserChangePassword, UserRead, TokenResponse,
     DirectoryBase, OrganizationCreate, OrganizationRead, OrganizationMemberRead
 )
-
+from app.services.auth_svc import get_current_user
+from app.models.user import AccountUser
 router = APIRouter(prefix="/api/v1/users", tags=["Users"])
 
 
 @router.get("/me", response_model=UserRead)
-def get_current_user(current_user: str = Depends()):
+def get_current_user(current_user: AccountUser = Depends(get_current_user)):
     """
     Get current authenticated user's profile
     
@@ -19,16 +20,16 @@ def get_current_user(current_user: str = Depends()):
     - Returns: email, name, phone, role, created_at
     """
     return {
-        "email": current_user,
-        "name": "User Name",
-        "phone": "+84912345678",
-        "role": "Member",
-        "created_at": "2024-05-31T15:39:31"
+        "email": current_user.email,
+        "name": current_user.name,
+        "phone": current_user.phone or "+84912345678",
+        "role": current_user.role,
+        "created_at": current_user.created_at
     }
 
 
 @router.put("/me", response_model=dict)
-def update_user_profile(data: UserUpdate, current_user: str = Depends()):
+def update_user_profile(data: UserUpdate, current_user: AccountUser = Depends(get_current_user)):
     """
     Update current user's profile information
     
@@ -42,9 +43,9 @@ def update_user_profile(data: UserUpdate, current_user: str = Depends()):
     return {
         "message": "Profile updated successfully",
         "user": {
-            "email": current_user,
-            "name": data.name or "User Name",
-            "phone": data.phone
+            "email": current_user.email,
+            "name": data.name or current_user.name,
+            "phone": data.phone or current_user.phone
         }
     }
 
@@ -68,7 +69,7 @@ def get_user_profile(email: str):
 
 
 @router.post("/change-password", response_model=dict)
-def change_password(data: UserChangePassword, current_user: str = Depends()):
+def change_password(data: UserChangePassword, current_user: AccountUser = Depends(get_current_user)):
     """
     Change user password
     
@@ -115,7 +116,7 @@ def get_directory(
 
 
 @router.post("/organization", response_model=dict, status_code=status.HTTP_201_CREATED)
-def create_organization(data: OrganizationCreate, current_user: str = Depends()):
+def create_organization(data: OrganizationCreate, current_user: AccountUser = Depends(get_current_user)):
     """
     Create a new organization
     
@@ -130,9 +131,9 @@ def create_organization(data: OrganizationCreate, current_user: str = Depends())
     return {
         "message": "Organization created successfully",
         "organization": {
-            "org_email": data.org_email or f"org_{current_user.split('@')[0]}@uet.edu.vn",
+            "org_email": data.org_email or f"org_{current_user.email.split('@')[0]}@uet.edu.vn",
             "org_name": data.org_name,
-            "representative_email": current_user,
+            "representative_email": current_user.email,
             "description": data.description,
             "created_at": "2024-05-31T15:39:31"
         }
@@ -160,7 +161,7 @@ def get_organization(org_email: str):
 def update_organization(
     org_email: str,
     data: OrganizationCreate,
-    current_user: str = Depends()
+    current_user: AccountUser = Depends(get_current_user)
 ):
     """
     Update organization information (representative only)
@@ -206,7 +207,7 @@ def add_organization_member(
     org_email: str,
     mem_email: str,
     mem_permission: str = "Member",
-    current_user: str = Depends()
+    current_user: AccountUser = Depends(get_current_user)
 ):
     """
     Add member to organization (admin only)
@@ -229,7 +230,7 @@ def add_organization_member(
 def remove_organization_member(
     org_email: str,
     mem_email: str,
-    current_user: str = Depends()
+    current_user: AccountUser = Depends(get_current_user)
 ):
     """
     Remove member from organization (admin only)

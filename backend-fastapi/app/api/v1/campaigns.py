@@ -2,11 +2,12 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from typing import Optional, List
 from decimal import Decimal
-from schemas.campaign_schema import (
+from app.schemas.campaign_schema import (
     CampaignCreate, CampaignUpdate, CampaignRead, CampaignDetailRead,
     CampaignListRead, CampaignFilter, CampaignApprovalAction
 )
-
+from app.services.auth_svc import get_current_user
+from app.models.user import AccountUser
 router = APIRouter(prefix="/api/v1/campaigns", tags=["Campaigns"])
 
 
@@ -52,7 +53,7 @@ def list_campaigns(
 @router.post("/", response_model=dict, status_code=status.HTTP_201_CREATED)
 def create_campaign(
     data: CampaignCreate,
-    current_user: str = Depends()
+    current_user: AccountUser = Depends(get_current_user)
 ):
     """
     Create a new campaign (organization representative only)
@@ -104,7 +105,7 @@ def get_campaign_detail(campaign_id: int):
 def update_campaign(
     campaign_id: int,
     data: CampaignCreate,
-    current_user: str = Depends()
+    current_user: AccountUser = Depends(get_current_user)
 ):
     """
     Update campaign information (creator or admin only)
@@ -123,7 +124,7 @@ def update_campaign(
 @router.delete("/{campaign_id}", response_model=dict)
 def delete_campaign(
     campaign_id: int,
-    current_user: str = Depends()
+    current_user: AccountUser = Depends(get_current_user)
 ):
     """
     Delete a campaign (creator or admin only)
@@ -143,7 +144,7 @@ def delete_campaign(
 def approve_campaign(
     campaign_id: int,
     data: CampaignApprovalAction,
-    current_user: str = Depends()
+    current_user: AccountUser = Depends(get_current_user)
 ):
     """
     Approve/Reject campaign (admin only)
@@ -187,7 +188,7 @@ def get_campaign_posts(
 @router.post("/{campaign_id}/end", response_model=dict)
 def end_campaign(
     campaign_id: int,
-    current_user: str = Depends()
+    current_user: AccountUser = Depends(get_current_user)
 ):
     """
     End a campaign (creator or admin only)

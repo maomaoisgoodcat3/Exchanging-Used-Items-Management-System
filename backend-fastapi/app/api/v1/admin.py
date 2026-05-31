@@ -2,14 +2,15 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from typing import Optional, List
 from decimal import Decimal
-from schemas.post_schema import PostApprovalAction
-from schemas.campaign_schema import CampaignApprovalAction
-
+from app.schemas.post_schema import PostApprovalAction
+from app.schemas.campaign_schema import CampaignApprovalAction
+from app.services.auth_svc import get_current_user
+from app.models.user import AccountUser
 router = APIRouter(prefix="/api/v1/admin", tags=["Admin"])
 
 
 @router.get("/dashboard", response_model=dict)
-def get_admin_dashboard(current_user: str = Depends()):
+def get_admin_dashboard(current_user: AccountUser = Depends(get_current_user)):
     """
     Get admin dashboard statistics
     
@@ -33,7 +34,7 @@ def get_admin_dashboard(current_user: str = Depends()):
 def get_pending_posts(
     limit: int = 20,
     skip: int = 0,
-    current_user: str = Depends()
+    current_user: AccountUser = Depends(get_current_user)
 ):
     """
     Get pending posts awaiting approval
@@ -58,7 +59,7 @@ def get_pending_posts(
 def approve_post_admin(
     post_id: int,
     data: PostApprovalAction,
-    current_user: str = Depends()
+    current_user: AccountUser = Depends(get_current_user)
 ):
     """
     Approve or reject a pending post
@@ -80,7 +81,7 @@ def approve_post_admin(
 def get_pending_campaigns(
     limit: int = 20,
     skip: int = 0,
-    current_user: str = Depends()
+    current_user: AccountUser = Depends(get_current_user)
 ):
     """
     Get pending campaigns awaiting approval
@@ -104,7 +105,7 @@ def get_pending_campaigns(
 def approve_campaign_admin(
     campaign_id: int,
     data: CampaignApprovalAction,
-    current_user: str = Depends()
+    current_user: AccountUser = Depends(get_current_user)
 ):
     """
     Approve or reject a pending campaign
@@ -125,7 +126,7 @@ def approve_campaign_admin(
 @router.put("/settings/service-fee", response_model=dict)
 def update_service_fee(
     percentage: Decimal,
-    current_user: str = Depends()
+    current_user: AccountUser = Depends(get_current_user)
 ):
     """
     Update global service fee percentage
@@ -148,7 +149,7 @@ def list_all_users(
     search: Optional[str] = None,
     limit: int = 50,
     skip: int = 0,
-    current_user: str = Depends()
+    current_user: AccountUser = Depends(get_current_user)
 ):
     """
     List all users (admin only)
@@ -172,7 +173,7 @@ def list_all_users(
 def update_user_role(
     email: str,
     role: str,
-    current_user: str = Depends()
+    current_user: AccountUser = Depends(get_current_user)
 ):
     """
     Update user role (admin to Member or vice versa)
@@ -193,7 +194,7 @@ def update_user_role(
 @router.get("/reports", response_model=dict)
 def get_system_reports(
     report_type: str = "daily",
-    current_user: str = Depends()
+    current_user: AccountUser = Depends(get_current_user)
 ):
     """
     Get system reports

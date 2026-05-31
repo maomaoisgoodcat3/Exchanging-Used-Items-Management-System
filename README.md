@@ -70,3 +70,6 @@ This is an application for exchanging/donating/selling used items at financially
  ┣ 📜 requirements.txt    # Danh sách thư viện Python
  ┗ 📜 .env                # Lưu cấu hình bảo mật
 ```
+To turn up this project, try: 
++ cd backend-fastapi
++ python -m uvicorn app.main:app --reload

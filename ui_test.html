@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>UET Marketplace Minimal UI</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #e9ecef; padding: 20px; display: flex; gap: 20px; justify-content: center; flex-wrap: wrap;}
+        .card { background: white; padding: 20px; border-radius: 8px; width: 300px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        input, select, textarea { width: 100%; margin-bottom: 10px; padding: 8px; box-sizing: border-box; }
+        button { width: 100%; background: #0d6efd; color: white; border: none; padding: 10px; cursor: pointer; font-weight: bold; margin-top: 5px; border-radius: 4px;}
+        button:hover { background: #0b5ed7; }
+        .msg { margin-top: 10px; padding: 10px; font-size: 14px; border-radius: 4px; display: none; }
+        .success { background: #d1e7dd; color: #0f5132; display: block; }
+        .error { background: #f8d7da; color: #842029; display: block; }
+        label { font-size: 13px; font-weight: bold; color: #333; margin-bottom: 3px; display: block;}
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h3>1. Đăng Ký</h3>
+        <input type="email" id="regEmail" value="test2@vnu.edu.vn" placeholder="Email...">
+        <input type="text" id="regName" value="Test User 2" placeholder="Họ và tên...">
+        <input type="password" id="regPass" value="123456" placeholder="Mật khẩu">
+        <input type="text" id="regPhone" value="0987654321" placeholder="Số điện thoại">
+        <button onclick="register()">Đăng Ký</button>
+        <div id="regMsg" class="msg"></div>
+    </div>
+
+    <div class="card">
+        <h3>2. Đăng Nhập</h3>
+        <input type="email" id="logEmail" value="test2@vnu.edu.vn" placeholder="Email...">
+        <input type="password" id="logPass" value="123456" placeholder="Mật khẩu...">
+        <button onclick="login()" style="background: #198754;">Đăng Nhập Lấy Token</button>
+        <div id="logMsg" class="msg"></div>
+    </div>
+
+    <div class="card">
+        <h3>3. Tạo Bài Đăng</h3>
+        
+        <label>Tiêu đề bài viết:</label>
+        <input type="text" id="postTitle" placeholder="VD: Bán combo sách vở...">
+        
+        <label>Mô tả chi tiết:</label>
+        <textarea id="postDesc" placeholder="Tình trạng đồ đạc..." rows="3"></textarea>
+        
+        <label>Hình thức:</label>
+        <select id="postCat">
+            <option value="Selling">Bán đồ (Selling)</option>
+            <option value="Trading">Trao đổi (Trading)</option>
+            <option value="Donating">Tặng (Donating)</option>
+        </select>
+
+        <label>Danh mục đồ vật:</label>
+        <select id="productCategory">
+            <option value="1" selected>Dụng cụ học tập</option>
+            <option value="2">Quần áo</option>
+            <option value="3">Đồ dùng</option>
+        </select>
+
+        <button onclick="createPost()" style="background: #ffc107; color: black; margin-top: 15px;">Đăng Bài Lên MySQL</button>
+        <div id="postMsg" class="msg"></div>
+    </div>
+
+    <script>
+        let myToken = "";
+
+        async function register() {
+            const data = {
+                email: document.getElementById('regEmail').value,
+                name: document.getElementById('regName').value,
+                password: document.getElementById('regPass').value,
+                phone: document.getElementById('regPhone').value
+            };
+            const response = await fetch('http://127.0.0.1:8000/api/v1/auth/register', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+            });
+            const result = await response.json();
+            const msgBox = document.getElementById('regMsg');
+            if(response.ok) { msgBox.className = "msg success"; msgBox.innerHTML = "✅ Đăng ký thành công!"; } 
+            else { msgBox.className = "msg error"; msgBox.innerText = "❌ Lỗi: " + JSON.stringify(result.detail); }
+        }
+
+        async function login() {
+            const formData = new URLSearchParams();
+            formData.append('username', document.getElementById('logEmail').value);
+            formData.append('password', document.getElementById('logPass').value);
+
+            const response = await fetch('http://127.0.0.1:8000/api/v1/auth/login', {
+                method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: formData
+            });
+            const result = await response.json();
+            const msgBox = document.getElementById('logMsg');
+
+            if(response.ok) {
+                myToken = result.access_token; 
+                msgBox.className = "msg success";
+                msgBox.innerHTML = "✅ Đã lưu Token vào bộ nhớ tạm!";
+            } else {
+                msgBox.className = "msg error";
+                msgBox.innerText = "❌ Lỗi: " + JSON.stringify(result.detail);
+            }
+        }
+
+        async function createPost() {
+            if (!myToken) {
+                alert("Bạn phải Đăng Nhập để lấy Token trước!");
+                return;
+            }
+
+            // Ép kiểu (parse) giá trị từ thẻ select sang số nguyên (Integer)
+            const selectedCategoryId = parseInt(document.getElementById('productCategory').value);
+
+            const postData = {
+                title: document.getElementById('postTitle').value,
+                description: document.getElementById('postDesc').value,
+                post_category: document.getElementById('postCat').value,
+                seller_email: document.getElementById('logEmail').value,
+                products: [selectedCategoryId], // Mảng ID danh mục động
+                images: []
+            };
+
+            const response = await fetch('http://127.0.0.1:8000/api/v1/posts/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + myToken 
+                },
+                body: JSON.stringify(postData)
+            });
+            
+            const result = await response.json();
+            const msgBox = document.getElementById('postMsg');
+
+            if(response.ok) {
+                msgBox.className = "msg success";
+                msgBox.innerHTML = `✅ Thành công! ID bài viết: ${result.post_id}`;
+            } else {
+                msgBox.className = "msg error";
+                msgBox.innerText = "❌ Lỗi: " + JSON.stringify(result.detail || result);
+            }
+        }
+    </script>
+</body>
+</html>

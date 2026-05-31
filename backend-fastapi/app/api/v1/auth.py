@@ -2,24 +2,39 @@ from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from pydantic import BaseModel # Import thêm cái này
 
 from app.core.database import get_db
 from app.core.config import settings
 from app.core.security import create_access_token
-from app.schemas.user_schema import UserCreate, UserResponse, Token
+# Sửa UserResponse thành UserRead, tạm bỏ Token
+from app.schemas.user_schema import UserCreate, UserRead 
 from app.services import auth_svc
 
 router = APIRouter()
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+# Khai báo lại class Token ở ngay đây để xài tạm, đỡ phải sửa file schema
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+@router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 def register(user_in: UserCreate, db: Session = Depends(get_db)):
     """Đăng ký tài khoản mới (Yêu cầu email phải có trong danh sách Directory)"""
-    return auth_svc.create_user(db=db, user_in=user_in)
+    db_user = auth_svc.create_user(db=db, user_in=user_in)
+    
+    # Manually map the DB model attributes to the schema's expected fields
+    return {
+        "email": db_user.user_email,
+        "name": db_user.user_name,
+        "phone": db_user.phone,
+        "role": db_user.role,
+        "created_at": db_user.created_at
+    }
 
 @router.post("/login", response_model=Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """Đăng nhập để lấy JWT Token"""
-    # Form data của OAuth2 mặc định dùng trường tên là 'username' để chứa email
     user = auth_svc.authenticate_user(db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
