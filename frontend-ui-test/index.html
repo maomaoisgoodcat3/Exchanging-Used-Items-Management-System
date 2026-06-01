@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>UET Marketplace</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="navbar">
+        <div class="logo" onclick="switchMainTab('tab-posts')" style="cursor:pointer;">UET Market</div>
+        
+        <div class="main-nav-tabs">
+            <button class="nav-btn active" onclick="switchMainTab('tab-posts')">Bài Đăng (Posts)</button>
+            <button class="nav-btn" onclick="switchMainTab('tab-campaigns')">Chiến Dịch (Campaigns)</button>
+        </div>
+
+        <div class="nav-actions">
+            <button id="btnOpenAuth" class="btn btn-outline" onclick="openModal('authModal')">Đăng Nhập / Đăng Ký</button>
+            <button id="btnOpenPost" class="btn btn-primary hidden" onclick="openModal('postModal')">Đăng Bài Mới</button>
+            <button id="btnProfile" class="btn btn-outline hidden" onclick="openModal('profileModal')">👤 Tài khoản</button>
+            <button id="btnLogout" class="btn btn-danger hidden" onclick="handleLogout()">Đăng Xuất</button>
+        </div>
+    </header>
+
+    <main class="container">
+        <div id="tab-posts" class="main-tab-content active">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h2>Thị trường trao đổi</h2>
+                <span id="activeFilterText" style="color: #0d6efd; font-weight: bold; cursor: pointer;" class="hidden" onclick="clearFilter()">✖ Đang lọc 1 bài viết (Xóa lọc)</span>
+            </div>
+            <div class="grid-list" id="globalPostsList">
+                <p class="empty-text">Đang tải bài viết...</p>
+            </div>
+        </div>
+
+        <div id="tab-campaigns" class="main-tab-content hidden">
+            <h2>Chiến dịch từ các Tổ chức</h2>
+            <div class="grid-list" id="globalCampaignsList">
+                <p class="empty-text">Chưa có chiến dịch nào.</p>
+            </div>
+        </div>
+    </main>
+
+    <div id="authModal" class="modal-overlay">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('authModal')">&times;</span>
+            <div class="modal-header">
+                <h3 id="authTitle">Đăng Nhập</h3>
+                <a href="#" onclick="toggleAuthMode()" id="authToggleHint">Chưa có tài khoản? Đăng ký ngay</a>
+            </div>
+            <div class="modal-body">
+                <input type="email" id="authEmail" placeholder="Email (VD: test@vnu.edu.vn)">
+                <input type="text" id="authName" class="hidden" placeholder="Họ và tên">
+                <input type="text" id="authPhone" class="hidden" placeholder="Số điện thoại">
+                <input type="password" id="authPass" placeholder="Mật khẩu">
+                <div id="authMsg" class="msg"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary w-100" id="btnSubmitAuth" onclick="handleAuth()">Xác Nhận Đăng Nhập</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="postModal" class="modal-overlay">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('postModal')">&times;</span>
+            <div class="modal-header"><h3>Tạo Bài Đăng Mới</h3></div>
+            <div class="modal-body">
+                <label>Tiêu đề</label>
+                <input type="text" id="postTitle" placeholder="VD: Bán giáo trình...">
+                <label>Mô tả chi tiết</label>
+                <textarea id="postDesc" rows="3" placeholder="Tình trạng, giá cả..."></textarea>
+                <div class="split-inputs">
+                    <div>
+                        <label>Hình thức</label>
+                        <select id="postCat">
+                            <option value="Selling">Bán đồ</option>
+                            <option value="Trading">Trao đổi</option>
+                            <option value="Donating">Tặng</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Danh mục</label>
+                        <select id="productCategory">
+                            <option value="1">Dụng cụ học tập</option>
+                            <option value="2">Quần áo</option>
+                            <option value="3">Đồ dùng</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="postMsg" class="msg"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-warning w-100" onclick="handleCreatePost()">Đăng Lên Hệ Thống</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="profileModal" class="modal-overlay">
+        <div class="modal-content profile-layout">
+            <span class="close-btn" onclick="closeModal('profileModal')">&times;</span>
+            <div class="profile-sidebar">
+                <button class="prof-tab-btn active" onclick="switchProfileTab('prof-info')">Thông tin cá nhân</button>
+                <button class="prof-tab-btn" onclick="switchProfileTab('prof-password')">Đổi mật khẩu</button>
+                <button class="prof-tab-btn" onclick="switchProfileTab('prof-transactions')">Lịch sử giao dịch</button>
+                <button class="prof-tab-btn" onclick="switchProfileTab('prof-myposts')">Quản lý Bài đăng</button>
+            </div>
+            <div class="profile-body">
+                <div id="prof-info" class="prof-content active"><h3>Thông tin của bạn</h3><p>(Sẽ gọi API Settings)</p></div>
+                <div id="prof-password" class="prof-content"><h3>Đổi mật khẩu</h3><p>(Sẽ gọi API Auth)</p></div>
+                <div id="prof-transactions" class="prof-content"><h3>Giao dịch</h3><p>(Sẽ gọi API Transactions)</p></div>
+                <div id="prof-myposts" class="prof-content">
+                    <h3>Bài đăng của tôi</h3>
+                    <div id="miniMyPostsList">
+                        </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

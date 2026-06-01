@@ -14,48 +14,67 @@ from app.models.user import AccountUser
 router = APIRouter(prefix="/api/v1/posts", tags=["Posts"])
 
 
-@router.get("/", response_model=PostListRead)
+# 1. API CHO USER THƯỜNG (Chỉ lấy bài đã duyệt)
+@router.get("/", response_model=list)
 def list_posts(
     post_category: Optional[str] = None,
-    search: Optional[str] = None,
-    status: Optional[str] = None,
-    sort_by: str = "created_at",
-    sort_order: str = "desc",
     limit: int = 20,
-    skip: int = 0
+    skip: int = 0,
+    db: Session = Depends(get_db)
 ):
-    """
-    List all posts with filtering and sorting
+    posts = db.query(Post).filter(
+        Post.approval_status == "Approved"
+    ).order_by(Post.created_at.desc()).offset(skip).limit(limit).all()
     
-    Database: Posts table
-    - Filters by post_category (Selling, Trading, Donating)
-    - Filters by status (Pending, Approved, Rejected, Sold, Closed)
-    - Searches in title and description
-    
-    - **post_category**: Selling, Trading, Donating
-    - **search**: Search by title or description
-    - **status**: Filter by status
-    - **sort_by**: created_at, title
-    - **sort_order**: asc, desc
-    - **limit**: Results per page (max 100)
-    - **skip**: Pagination offset
-    """
-    return {
-        "data": [
-            {
-                "post_id": 1,
-                "title": "Used Laptop",
-                "post_category": "Selling",
-                "price": Decimal("500.00"),
-                "status": "Approved",
-                "seller_email": "seller@uet.edu.vn",
-                "created_at": "2024-05-31T15:39:31"
-            }
-        ],
-        "total": 100,
-        "limit": limit,
-        "skip": skip
-    }
+    return [{
+        "post_id": p.post_id,
+        "title": p.title,
+        "description": p.description,
+        "seller_email": p.seller_email,
+        "post_category": p.post_type.value if hasattr(p.post_type, 'value') else str(p.post_type),
+        "status": "Approved", # User thường không cần biết trạng thái thực sự
+        "open_status": p.open_status.value if hasattr(p.open_status, 'value') else str(p.open_status)
+    } for p in posts]
+
+# 2. API CHO ADMIN (Lấy mọi bài viết)
+@router.get("/admin-all", response_model=list)
+def get_all_posts_admin(
+    db: Session = Depends(get_db),
+    current_user: AccountUser = Depends(get_current_user)
+):
+    if current_user.role != "Admin":
+        raise HTTPException(status_code=403, detail="Chỉ Admin mới có quyền xem toàn bộ bài viết.")
+        
+    posts = db.query(Post).order_by(Post.created_at.desc()).all()
+    return [{
+        "post_id": p.post_id,
+        "title": p.title,
+        "description": p.description,
+        "seller_email": p.seller_email,
+        "post_category": p.post_type.value if hasattr(p.post_type, 'value') else str(p.post_type),
+        "status": p.approval_status.value if hasattr(p.approval_status, 'value') else str(p.approval_status),
+        "open_status": p.open_status.value if hasattr(p.open_status, 'value') else str(p.open_status),
+        "rejection_reason": getattr(p, 'rejection_reason', None)
+    } for p in posts]
+
+# 3. API CHO NGƯỜI ĐĂNG BÀI (Lấy mọi bài của chính họ)
+@router.get("/my-posts", response_model=list)
+def get_my_posts(
+    db: Session = Depends(get_db), 
+    current_user: AccountUser = Depends(get_current_user)
+):
+    posts = db.query(Post).filter(Post.seller_email == current_user.user_email).order_by(Post.created_at.desc()).all()
+    return [{
+        "post_id": p.post_id,
+        "title": p.title,
+        "description": p.description,
+        "seller_email": p.seller_email,
+        "post_category": p.post_type.value if hasattr(p.post_type, 'value') else str(p.post_type),
+        "status": p.approval_status.value if hasattr(p.approval_status, 'value') else str(p.approval_status),
+        "open_status": p.open_status.value if hasattr(p.open_status, 'value') else str(p.open_status),
+        "rejection_reason": getattr(p, 'rejection_reason', None)
+    } for p in posts]
+
 
 
 @router.post("/", response_model=dict, status_code=status.HTTP_201_CREATED)
@@ -201,20 +220,34 @@ def mark_post_sold(
 def approve_post(
     post_id: int,
     data: PostApprovalAction,
+    db: Session = Depends(get_db),
     current_user: AccountUser = Depends(get_current_user)
 ):
-    """
-    Approve/Reject post (admin only)
+    """Admin duyệt / từ chối bài viết"""
+    if current_user.role != "Admin":
+        raise HTTPException(status_code=403, detail="Chỉ Admin mới có quyền duyệt bài.")
+        
+    post = db.query(Post).filter(Post.post_id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Không tìm thấy bài viết")
+
+    if data.action == "approve":
+        post.approval_status = "Approved"
+        post.open_status = "Available"
+        post.rejection_reason = None # Xóa lý do reject cũ nếu Admin đổi ý
+    elif data.action == "reject":
+        post.approval_status = "Rejected"
+        post.open_status = "Closed" # Bài bị reject sẽ tự động đóng
+        # Lấy lý do (nếu Schema của bạn không có trường này, nó sẽ dùng mặc định)
+        post.rejection_reason = getattr(data, 'reject_reason', "Vi phạm quy định cộng đồng")
+
+    post.reviewed_by = current_user.user_email
+    db.commit()
     
-    Database: Posts table
-    - Updates status (Approved/Rejected)
-    - Sets reviewed_by and reviewed_at
-    - Sets reject_reason if rejected
-    """
     return {
-        "message": f"Post {data.action}",
+        "message": f"Đã chuyển trạng thái bài viết thành {data.action}",
         "post_id": post_id,
-        "status": data.action
+        "status": post.approval_status
     }
 
 

@@ -1,23 +1,40 @@
 """Admin Management API Endpoints"""
 from fastapi import APIRouter, HTTPException, status, Depends
+from sqlalchemy.orm import Session
 from typing import Optional, List
 from decimal import Decimal
+from datetime import datetime
+
+from app.core.database import get_db
+from app.services.auth_svc import get_current_user
+from app.models.user import AccountUser, RoleEnum
+from app.models.post import Post
+from app.models.campaign import Campaign
 from app.schemas.post_schema import PostApprovalAction
 from app.schemas.campaign_schema import CampaignApprovalAction
-from app.services.auth_svc import get_current_user
-from app.models.user import AccountUser
+
 router = APIRouter(prefix="/api/v1/admin", tags=["Admin"])
 
+# ==========================================
+# DEPENDENCY: KIỂM TRA QUYỀN ADMIN
+# ==========================================
+def get_admin_user(current_user: AccountUser = Depends(get_current_user)):
+    """Vệ sĩ: Chặn tất cả những ai không phải Admin"""
+    if current_user.role != RoleEnum.Admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Quyền truy cập bị từ chối. Chỉ Admin mới thực hiện được hành động này."
+        )
+    return current_user
+
+# ==========================================
+# API ENDPOINTS
+# ==========================================
 
 @router.get("/dashboard", response_model=dict)
-def get_admin_dashboard(current_user: AccountUser = Depends(get_current_user)):
+def get_admin_dashboard(admin: AccountUser = Depends(get_admin_user)):
     """
-    Get admin dashboard statistics
-    
-    Database: Posts, Campaigns, Transactions, Users tables
-    - Counts pending posts and campaigns
-    - Calculates total revenue from service_fee
-    - Tracks active transactions
+    Get admin dashboard statistics (Giữ nguyên Mock Data tạm thời)
     """
     return {
         "total_users": 1500,
@@ -34,46 +51,59 @@ def get_admin_dashboard(current_user: AccountUser = Depends(get_current_user)):
 def get_pending_posts(
     limit: int = 20,
     skip: int = 0,
-    current_user: AccountUser = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    admin: AccountUser = Depends(get_admin_user)
 ):
     """
-    Get pending posts awaiting approval
-    
-    Database: Posts table
-    - Retrieves posts where status = 'Pending'
-    - Joins with Users table to get seller info
+    Lấy danh sách các bài đăng đang chờ duyệt (KẾT NỐI DB THẬT)
     """
-    return [
-        {
-            "post_id": 1,
-            "title": "Used Laptop",
-            "seller_email": "seller@uet.edu.vn",
-            "post_category": "Selling",
-            "status": "Pending",
-            "created_at": "2024-05-31T15:39:31"
-        }
-    ]
+    posts = db.query(Post).filter(Post.approval_status == "Pending").offset(skip).limit(limit).all()
+    result = []
+    for p in posts:
+        result.append({
+            "post_id": p.post_id,
+            "title": p.title,
+            "seller_email": p.seller_email,
+            "post_category": p.post_type if hasattr(p, 'post_type') else "Unknown",
+            "status": p.approval_status,
+            "created_at": p.created_at.isoformat() if p.created_at else None
+        })
+    return result
 
 
 @router.post("/posts/{post_id}/approve", response_model=dict)
 def approve_post_admin(
     post_id: int,
     data: PostApprovalAction,
-    current_user: AccountUser = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    admin: AccountUser = Depends(get_admin_user)
 ):
     """
-    Approve or reject a pending post
-    
-    Database: Posts table
-    - Updates status (Approved/Rejected)
-    - Sets reviewed_by and reviewed_at
-    - Sets reject_reason if rejected
+    Duyệt hoặc từ chối bài đăng (KẾT NỐI DB THẬT)
     """
+    post = db.query(Post).filter(Post.post_id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Không tìm thấy bài viết")
+
+    if data.action == "approve":
+        post.approval_status = "Approved"
+        post.open_status = "Available"
+    elif data.action == "reject":
+        post.approval_status = "Rejected"
+        post.rejection_reason = data.reject_reason
+        post.open_status = "Closed"
+
+    post.reviewed_by = admin.user_email
+    post.reviewed_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(post)
+
     return {
-        "message": f"Post {data.action}",
-        "post_id": post_id,
-        "status": data.action,
-        "reviewed_by": current_user
+        "message": f"Post {data.action} successfully",
+        "post_id": post.post_id,
+        "status": post.approval_status,
+        "reviewed_by": admin.user_email
     }
 
 
@@ -81,66 +111,73 @@ def approve_post_admin(
 def get_pending_campaigns(
     limit: int = 20,
     skip: int = 0,
-    current_user: AccountUser = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    admin: AccountUser = Depends(get_admin_user)
 ):
     """
-    Get pending campaigns awaiting approval
-    
-    Database: Campaigns table
-    - Retrieves campaigns where status = 'Pending'
-    - Joins with Organizations table to get org info
+    Lấy danh sách các chiến dịch đang chờ duyệt (KẾT NỐI DB THẬT)
     """
-    return [
-        {
-            "campaign_id": 1,
-            "title": "Summer Campaign",
-            "org_email": "org@uet.edu.vn",
-            "status": "Pending",
-            "created_at": "2024-05-31T15:39:31"
-        }
-    ]
+    campaigns = db.query(Campaign).filter(Campaign.approval_status == "Pending").offset(skip).limit(limit).all()
+    result = []
+    for c in campaigns:
+        result.append({
+            "campaign_id": c.campaign_id,
+            "title": c.title,
+            "org_email": c.organ_email,
+            "status": c.approval_status,
+            "created_at": c.start_date.isoformat() if c.start_date else None
+        })
+    return result
 
 
 @router.post("/campaigns/{campaign_id}/approve", response_model=dict)
 def approve_campaign_admin(
     campaign_id: int,
     data: CampaignApprovalAction,
-    current_user: AccountUser = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    admin: AccountUser = Depends(get_admin_user)
 ):
     """
-    Approve or reject a pending campaign
-    
-    Database: Campaigns table
-    - Updates status (Approved/Rejected)
-    - Sets reviewed_by and reviewed_at
-    - Sets reject_reason if rejected
+    Duyệt hoặc từ chối chiến dịch (KẾT NỐI DB THẬT)
     """
+    campaign = db.query(Campaign).filter(Campaign.campaign_id == campaign_id).first()
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Không tìm thấy chiến dịch")
+
+    if data.action == "approve":
+        campaign.approval_status = "Approved"
+        campaign.open_status = "Available"
+    elif data.action == "reject":
+        campaign.approval_status = "Rejected"
+        campaign.rejection_reason = data.reject_reason
+        campaign.open_status = "Closed"
+
+    campaign.admin_reviewer = admin.user_email
+    campaign.approval_date = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(campaign)
+
     return {
-        "message": f"Campaign {data.action}",
-        "campaign_id": campaign_id,
-        "status": data.action,
-        "reviewed_by": current_user
+        "message": f"Campaign {data.action} successfully",
+        "campaign_id": campaign.campaign_id,
+        "status": campaign.approval_status,
+        "reviewed_by": admin.user_email
     }
 
 
 @router.put("/settings/service-fee", response_model=dict)
 def update_service_fee(
     percentage: Decimal,
-    current_user: AccountUser = Depends(get_current_user)
+    admin: AccountUser = Depends(get_admin_user)
 ):
     """
-    Update global service fee percentage
-    
-    Database: Settings table
-    - Updates setting_value for service fee
-    - Records updated_by and updated_at
-    
-    - **percentage**: Service fee percentage (e.g., 5.0)
+    Update global service fee percentage (Giữ nguyên Mock Data tạm thời)
     """
     return {
         "message": "Service fee updated",
         "service_fee_percentage": percentage,
-        "updated_by": current_user
+        "updated_by": admin.user_email
     }
 
 
@@ -149,65 +186,67 @@ def list_all_users(
     search: Optional[str] = None,
     limit: int = 50,
     skip: int = 0,
-    current_user: AccountUser = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    admin: AccountUser = Depends(get_admin_user)
 ):
     """
-    List all users (admin only)
-    
-    Database: Users table
-    - Retrieves all users from Users table
-    - Optional search by email or name
+    Lấy danh sách người dùng (KẾT NỐI DB THẬT)
     """
-    return [
-        {
-            "email": "user@uet.edu.vn",
-            "name": "User Name",
-            "phone": "+84912345678",
-            "role": "Member",
-            "created_at": "2024-01-01T00:00:00"
-        }
-    ]
+    query = db.query(AccountUser)
+    if search:
+        query = query.filter(AccountUser.user_email.contains(search) | AccountUser.user_name.contains(search))
+    
+    users = query.offset(skip).limit(limit).all()
+    result = []
+    for u in users:
+        result.append({
+            "email": u.user_email,
+            "name": u.user_name,
+            "phone": u.phone,
+            "role": u.role,
+            "created_at": u.created_at.isoformat() if u.created_at else None
+        })
+    return result
 
 
 @router.post("/users/{email}/role", response_model=dict)
 def update_user_role(
     email: str,
     role: str,
-    current_user: AccountUser = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    admin: AccountUser = Depends(get_admin_user)
 ):
     """
-    Update user role (admin to Member or vice versa)
-    
-    Database: Users table
-    - Updates role (Member, Admin)
-    
-    - **email**: User email
-    - **role**: New role (Member or Admin)
+    Cập nhật quyền người dùng (KẾT NỐI DB THẬT)
     """
+    if role not in ["Member", "Admin"]:
+        raise HTTPException(status_code=400, detail="Role không hợp lệ (Chỉ nhận Member hoặc Admin)")
+        
+    user = db.query(AccountUser).filter(AccountUser.user_email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Không tìm thấy người dùng")
+        
+    user.role = role
+    db.commit()
+    db.refresh(user)
+
     return {
-        "message": "User role updated",
-        "email": email,
-        "role": role
+        "message": "User role updated successfully",
+        "email": user.user_email,
+        "role": user.role
     }
 
 
 @router.get("/reports", response_model=dict)
 def get_system_reports(
     report_type: str = "daily",
-    current_user: AccountUser = Depends(get_current_user)
+    admin: AccountUser = Depends(get_admin_user)
 ):
     """
-    Get system reports
-    
-    Database: Transactions, Posts, Campaigns tables
-    - Daily/Weekly/Monthly statistics
-    - Revenue reports
-    - Activity reports
-    
-    - **report_type**: Report type (daily, weekly, monthly)
+    Get system reports (Giữ nguyên Mock Data tạm thời)
     """
     return {
-        "period": "2024-05-31",
+        "period": datetime.utcnow().strftime("%Y-%m-%d"),
         "report_type": report_type,
         "new_users": 25,
         "new_posts": 120,
