@@ -1,79 +1,101 @@
-//"use client";
+"use client"; // BẮT BUỘC phải mở ra vì có sử dụng onClick và hook
 
 import Link from "next/link";
-/*import { useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
-const router = useRouter();
-const handleLogout = () => {
-  router.push("/login");
-};*/
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <div className="flex min-h-screen bg-gray-100">
+  const [isOpen, setIsOpen] = useState(false);
+  const router = useRouter();
+
+  // Đưa hàm handleLogout vào bên trong Component
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    // Sử dụng router.push thay vì window.location.href để chuyển trang mượt hơn, không bị chớp trắng màn hình
+    router.push("/login"); 
+  };
+
+return (
+  <div className="min-h-screen bg-blue-100">
+
+    {/* Header */}
+    <header className="bg-gray-100 shadow-md px-6 py-4 flex justify-between items-center">
+      <h1 className="text-xl font-semibold text-blue-800">
+        Nền tảng trao đổi đồ cũ UET
+      </h1>
+
+    <div className="relative">
+    <button
+      onClick={() => setIsOpen(!isOpen)}
+      className="flex items-center gap-2 bg-gray-100 px-3 py-2 rounded-lg"
+    >
+      👤 Nguyễn Văn A
+      <span>▼</span>
+    </button>
+
+    {isOpen && (
+      <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg z-50">
+        <div className="p-4 border-b">
+          <p className="font-medium">Nguyễn Văn A</p>
+          <p className="text-sm text-gray-500">
+            user@gmail.com
+          </p>
+        </div>
+
+        <button className="w-full text-left px-4 py-3 hover:bg-blue-100">
+          Tài khoản
+        </button>
+
+        <button className="w-full text-left px-4 py-3 hover:bg-blue-100">
+          Cài đặt
+        </button>
+
+        <button
+          onClick={handleLogout}
+          className="w-full text-left px-4 py-3 hover:bg-blue-100"
+        >
+          Đăng xuất
+        </button>
+      </div>
+    )}
+  </div>
+    </header>
+
+    {/* Body */}
+    <div className="flex">
 
       {/* Sidebar */}
-      <aside className="w-48 bg-white shadow-md p-4 flex flex-col h-screen">
-        <h2 className="text-l font-bold text-blue-600 mb-6">
-          Dashboard
-        </h2>
-
-        <nav className="space-y-3 text-m">
-          <Link href="/posts" className="block hover:text-blue-600">
-            Posts
+      <aside className="sticky top-0 w-48 bg-white px-6 py-10 shadow-md flex flex-col h-screen">
+        <nav className="space-y-3 text-md flex-1">
+          <Link href="/posts" className="block hover:text-blue-600 transition">
+            📝 Posts
           </Link>
-
-          <Link href="/campaigns" className="block hover:text-blue-600">
-            Campaigns
+          <Link href="/campaigns" className="block hover:text-blue-600 transition">
+            🔖 Campaigns
           </Link>
-
-          <Link href="/my-posts" className="block hover:text-blue-600">
-            My Posts
+          <Link href="/my-posts" className="block hover:text-blue-600 transition">
+            🗂️ My Posts
           </Link>
-
-          <Link href="/transactions" className="block hover:text-blue-600">
-            Transactions
+          <Link href="/my-orders" className="block hover:text-blue-600 transition">
+            🛍️ My orders
           </Link>
-
-          <Link href="/notifications" className="block hover:text-blue-600">
-            Notifications
+          <Link href="/notifications" className="block hover:text-blue-600 transition">
+            📮 Notifications
           </Link>
         </nav>
-
-          {/* LOGOUT FIXED BOTTOM */}
-          <div className="mt-auto">
-            <Link
-              href="/login"
-              className="block w-full text-center bg-red-500 text-white py-2 rounded-lg hover:bg-red-600"
-            >
-            Đăng xuất
-            </Link>
-          </div>
-
+        
       </aside>
 
-      {/* Main area */}
-      <div className="flex-1 flex flex-col">
+      {/* Content */}
+      <main className="p-6 flex-1 overflow-y-auto">
+        {children}
+      </main>
 
-        {/* Header */}
-        <header className="bg-white shadow px-6 py-4 flex justify-between">
-          <h1 className="text-xl font-semibold">Nền tảng trao đổi đồ cũ Trường X</h1>
-
-          <div className="text-sm text-gray-600">
-            User: Guest
-          </div>
-        </header>
-
-        {/* Content */}
-        <main className="p-6">
-          {children}
-        </main>
-
-      </div>
     </div>
-  );
-}
+  </div>
+)};

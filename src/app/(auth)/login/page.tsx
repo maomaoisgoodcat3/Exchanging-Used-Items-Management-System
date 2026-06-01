@@ -16,7 +16,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100">
+    <div className="flex min-h-screen items-center justify-center bg-blue-100">
       <div className="w-full max-w-md rounded-xl bg-white p-8 shadow-lg">
 
         <div className="mb-8 text-center">
@@ -56,7 +56,7 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            className="w-full rounded-lg bg-blue-600 py-3 text-white"
+            className="w-full rounded-lg bg-blue-600 py-3 text-white hover:bg-pink-700"
           >
             Đăng nhập
           </button>
