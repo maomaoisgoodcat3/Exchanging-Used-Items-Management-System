@@ -1,16 +1,19 @@
 // Tệp: src/components/features/post/PostCard.tsx
 import type { Post } from "@/types/post";
 
-const typeColor: Record<Post["type"], string> = {
+export const typeColor: Record<Post["type"], string> = {
   TRAO_DOI: "bg-yellow-100 text-yellow-700",
   MUA_BAN: "bg-blue-100 text-blue-700",
   QUYEN_GOP: "bg-green-100 text-green-700",
 };
 
-export default function PostCard({ post, onClick }: { post: Post; onClick: () => void }) {
+export default function PostCard(
+  {post, onClick }: { 
+    post: Post; onClick: () => void }) {
+
+  
   return (
     <div
-      onClick={onClick}
       className="bg-white rounded-xl shadow hover:shadow-lg transition p-4 flex flex-col h-full cursor-pointer"
     >
       <div className="flex justify-between text-xs mb-2">
@@ -26,9 +29,12 @@ export default function PostCard({ post, onClick }: { post: Post; onClick: () =>
         <span className="inline-block mt-2 text-xs bg-gray-100 px-2 py-1 rounded">{post.category}</span>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-gray-100 text-center text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors">
+      <div 
+        onClick={onClick}
+        className="mt-4 pt-3 border-t border-gray-100 text-center text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors">
         Xem chi tiết &rarr;
       </div>
+
     </div>
   );
 }
