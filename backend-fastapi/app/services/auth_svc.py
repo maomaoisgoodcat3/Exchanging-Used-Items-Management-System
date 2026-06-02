@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException, status, Depends
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from app.models.user import AccountUser, Directory
+from app.models.user import User, Directory
 from app.schemas.user_schema import UserCreate
 from app.core.security import get_password_hash, verify_password
 from app.core.config import settings
@@ -18,7 +18,7 @@ def create_user(db: Session, user_in: UserCreate):
         )
 
     # 2. Kiểm tra trùng lặp
-    existing_user = db.query(AccountUser).filter(AccountUser.user_email == user_in.email).first()
+    existing_user = db.query(User).filter(User.email == user_in.email).first()
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, 
@@ -26,9 +26,9 @@ def create_user(db: Session, user_in: UserCreate):
         )
 
     # 3. Tạo user mới
-    db_user = AccountUser(
-        user_email=user_in.email,
-        user_name=user_in.name,
+    db_user = User(
+        email=user_in.email,
+        name=user_in.name,
         password_hash=get_password_hash(user_in.password),
         phone=user_in.phone
     )
@@ -38,7 +38,7 @@ def create_user(db: Session, user_in: UserCreate):
     return db_user
 
 def authenticate_user(db: Session, email: str, password: str):
-    user = db.query(AccountUser).filter(AccountUser.user_email == email).first()
+    user = db.query(User).filter(User.email == email).first()
     if not user:
         return False
     if not verify_password(password, user.password_hash):
@@ -64,7 +64,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         raise credentials_exception
         
     # Tìm user trong Database
-    user = db.query(AccountUser).filter(AccountUser.user_email == email).first()
+    user = db.query(User).filter(User.email == email).first()
     if user is None:
         raise credentials_exception
     return user

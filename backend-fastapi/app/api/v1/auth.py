@@ -1,51 +1,131 @@
-from datetime import timedelta
+"""Authentication and Account Management API"""
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from pydantic import BaseModel # Import thêm cái này
+from pydantic import BaseModel, EmailStr, Field
+from datetime import timedelta
+import logging
 
 from app.core.database import get_db
-from app.core.config import settings
-from app.core.security import create_access_token
-# Sửa UserResponse thành UserRead, tạm bỏ Token
-from app.schemas.user_schema import UserCreate, UserRead 
-from app.services import auth_svc
+from app.core.security import verify_password, get_password_hash, create_access_token
+from app.services.auth_svc import get_current_user
+from app.models.user import User, Directory # Import theo Model mới
 
-router = APIRouter()
+router = APIRouter(prefix="/api/v1/auth", tags=["Authentication & Account"])
 
-# Khai báo lại class Token ở ngay đây để xài tạm, đỡ phải sửa file schema
-class Token(BaseModel):
-    access_token: str
-    token_type: str
+# ==========================================
+# 1. PYDANTIC SCHEMAS (Định nghĩa cấu trúc dữ liệu)
+# ==========================================
+class UserRegister(BaseModel):
+    user_email: EmailStr
+    user_name: str
+    phone: str
+    password: str = Field(..., min_length=6)
+    verify_password: str = Field(..., min_length=6)
 
-@router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
-def register(user_in: UserCreate, db: Session = Depends(get_db)):
-    """Đăng ký tài khoản mới (Yêu cầu email phải có trong danh sách Directory)"""
-    db_user = auth_svc.create_user(db=db, user_in=user_in)
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str = Field(..., min_length=6)
+    verify_new_password: str = Field(..., min_length=6)
+
+class ForgotPasswordRequest(BaseModel):
+    user_email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    reset_token: str
+    new_password: str = Field(..., min_length=6)
+
+# ==========================================
+# 2. API ENDPOINTS
+# ==========================================
+
+@router.post("/register", status_code=status.HTTP_201_CREATED)
+def register_user(data: UserRegister, db: Session = Depends(get_db)):
+    """Đăng ký tài khoản (Yêu cầu nhập đủ trường và khớp verify_password)"""
     
-    # Manually map the DB model attributes to the schema's expected fields
-    return {
-        "email": db_user.user_email,
-        "name": db_user.user_name,
-        "phone": db_user.phone,
-        "role": db_user.role,
-        "created_at": db_user.created_at
-    }
+    # 1. Kiểm tra mật khẩu có khớp không
+    if data.password != data.verify_password:
+        raise HTTPException(status_code=400, detail="Mật khẩu xác nhận không khớp!")
 
-@router.post("/login", response_model=Token)
+    # 2. Kiểm tra Email đã tồn tại trong Hệ thống (Users) chưa
+    existing_user = db.query(User).filter(User.email == data.user_email).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email này đã được đăng ký!")
+        
+    # 3. Kiểm tra Email có nằm trong danh bạ nhà trường (Directory) không
+    directory_record = db.query(Directory).filter(Directory.email == data.user_email).first()
+    if not directory_record:
+        raise HTTPException(
+            status_code=403, 
+            detail="Email không thuộc danh sách nội bộ của trường. Không thể đăng ký."
+        )
+
+    # 4. Tạo tài khoản mới (SQL Mới: Bảng Users)
+    new_user = User(
+        email=data.user_email,
+        name=data.user_name,
+        password_hash=get_password_hash(data.password),
+        phone=data.phone,
+        role="Member"
+    )
+    
+    db.add(new_user)
+    db.commit()
+    
+    return {"message": "Đăng ký tài khoản thành công!"}
+
+
+@router.post("/login")
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    """Đăng nhập để lấy JWT Token"""
-    user = auth_svc.authenticate_user(db, form_data.username, form_data.password)
-    if not user:
+    """Đăng nhập lấy JWT Token"""
+    user = db.query(User).filter(User.email == form_data.username).first()
+    
+    if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email hoặc mật khẩu không chính xác",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    # Tạo Token
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user.user_email}, expires_delta=access_token_expires
-    )
+        
+    access_token = create_access_token(data={"sub": user.email})
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+@router.put("/change-password")
+def change_password(
+    data: ChangePasswordRequest, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Đổi mật khẩu trong Tab Profile"""
+    # 1. Kiểm tra mật khẩu cũ
+    if not verify_password(data.old_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="Mật khẩu cũ không chính xác!")
+        
+    # 2. Kiểm tra mật khẩu mới và xác nhận
+    if data.new_password != data.verify_new_password:
+        raise HTTPException(status_code=400, detail="Mật khẩu xác nhận không khớp!")
+        
+    # 3. Cập nhật
+    current_user.password_hash = get_password_hash(data.new_password)
+    db.commit()
+    
+    return {"message": "Đổi mật khẩu thành công!"}
+
+
+@router.post("/forgot-password")
+def forgot_password(data: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    """Yêu cầu cấp lại mật khẩu (Gửi Token)"""
+    user = db.query(User).filter(User.email == data.user_email).first()
+    if not user:
+        # Trả về success kể cả khi không thấy email để chống Hacker dò quét email
+        return {"message": "Nếu email tồn tại, hệ thống đã gửi link khôi phục."}
+        
+    # Tạo reset token (Dùng tạm hàm access_token, set hạn 15 phút)
+    reset_token = create_access_token(data={"sub": user.email, "type": "reset"}, expires_delta=timedelta(minutes=15))
+    
+    # MOCKUP GỬI EMAIL: Thay vì gửi thật, ta in ra Terminal để Test
+    mock_reset_link = f"http://localhost:8000/api/v1/auth/reset-password?token={reset_token}"
+    logging.warning(f" [MOCK EMAIL] Gửi tới {user.email}. Link khôi phục: {mock_reset_link}")
+    
+    return {"message": "Nếu email tồn tại, hệ thống đã gửi link khôi phục. Vui lòng check Terminal!"}
