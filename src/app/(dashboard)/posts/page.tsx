@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from "react";
 import PostCard from "@/components/features/post/PostCard";
+import { useAuth } from "@/hooks/useAuth";
 import { getPosts } from "@/services/postServices";
 import type { Post } from "@/types/post";
 
 export default function PostsPage() {
+  const { user } = useAuth();
   const [search, setSearch] = useState("");
   const [posts, setPosts] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -53,9 +55,31 @@ export default function PostsPage() {
     setFormProducts([...formProducts, { id: Date.now(), name: "", quantity: 1, price: 0 }]);
   };
 
+  const isAdmin = user?.role === "ADMIN";
+  const isStudent = user?.role === "STUDENT";
+  const isOrganisation = user?.role === "CLUB";
+  const canCreatePost = isStudent || isOrganisation;
+
 
   return (
     <div className="space-y-6 relative">
+      <div className="rounded-xl border border-blue-100 bg-white p-4 shadow-sm">
+        {isAdmin && (
+          <p className="text-sm font-medium text-blue-800">
+            Admin view: xem toàn bộ bài đăng và chuẩn bị nhánh duyệt/ẩn/xóa bài.
+          </p>
+        )}
+        {isStudent && (
+          <p className="text-sm font-medium text-green-800">
+            User view: xem danh sách và tạo bài đăng trao đổi/mua bán/quyên góp.
+          </p>
+        )}
+        {isOrganisation && (
+          <p className="text-sm font-medium text-cyan-800">
+            Organisation view: tạo bài đăng đại diện cho {user?.organization?.name ?? "tổ chức"}.
+          </p>
+        )}
+      </div>
       {/* 1. HEADER + SEARCH + NÚT TẠO BÀI ĐĂNG */}
       <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
         <h1 className="text-2xl font-bold text-gray-800">📰 Danh sách bài đăng</h1>
@@ -83,12 +107,14 @@ export default function PostsPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
           
+          {canCreatePost && (
           <button 
             onClick={() => setIsCreating(true)} // Mở Pop-up khi click
             className="bg-blue-600 hover:bg-blue-800 text-white font-bold py-2 px-6 rounded-lg transition-colors whitespace-nowrap shadow-md"
           >
             + Đăng bài mới
           </button>
+          )}
         </div>
       </div>
 
