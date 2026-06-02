@@ -80,19 +80,11 @@ def get_my_posts(
 @router.post("/", response_model=dict, status_code=status.HTTP_201_CREATED)
 def create_post(
     data: PostCreate,
-    db: Session = Depends(get_db), # Thêm Dependency để gọi DB
-    current_user: AccountUser = Depends(get_current_user) # Gọi hàm giải mã Token để lấy User thật
+    db: Session = Depends(get_db),
+    current_user: AccountUser = Depends(get_current_user)
 ):
-    """
-    Create a new post
-    
-    Database: Posts table (LƯU THẬT VÀO MYSQL)
-    """
     if not data.title or not data.description:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Title and description are required"
-        )
+        raise HTTPException(status_code=400, detail="Title and description are required")
     
     # 1. Tạo bảng Post chính
     new_post = Post(
@@ -105,19 +97,20 @@ def create_post(
         open_status="Available"
     )
     db.add(new_post)
-    db.flush() # Đẩy tạm xuống DB để lấy post_id sinh ra tự động
+    db.flush() # Lấy post_id
 
-    # 2. Xử lý danh sách Products (Mô phỏng: tạo PostProduct từ ID giả định)
-    # LƯU Ý: Vì chưa có bảng Storage, ta tạm lưu ID sản phẩm vào bảng PostProduct
-    for prod_id in data.products:
+    # 2. Xử lý danh sách Products (ĐÃ SỬA ĐỂ NHẬN ĐA THÔNG TIN)
+    for prod in data.products:
         new_prod = PostProduct(
             post_id=new_post.post_id,
-            product_category_id=prod_id, # Tạm mượn cột này để lưu ID đồ vật
-            product_quantity=1
+            product_category_id=prod.product_category_id,
+            product_name=prod.product_name,
+            product_quantity=prod.product_quantity,
+            product_price=prod.product_price
         )
         db.add(new_prod)
 
-    # 3. Xử lý Images (nếu có)
+    # 3. Xử lý Images
     if data.images:
         for img in data.images:
             new_img = PostImage(
@@ -126,16 +119,12 @@ def create_post(
             )
             db.add(new_img)
 
-    # 4. Commit toàn bộ thay đổi xuống MySQL
     db.commit()
-    db.refresh(new_post)
     
     return {
-        "message": "Post created successfully and saved to Database!",
+        "message": "Post created successfully!",
         "post_id": new_post.post_id,
-        "seller_email": current_user.user_email,
-        "status": new_post.approval_status,
-        "created_at": new_post.created_at
+        "status": new_post.approval_status
     }
 
 @router.get("/{post_id}", response_model=PostDetailRead)
@@ -362,3 +351,26 @@ def get_similar_posts(post_id: int, limit: int = 10):
             "status": "Approved"
         }
     ]
+
+
+@router.put("/{post_id}/toggle-status", response_model=dict)
+def toggle_post_status(
+    post_id: int,
+    db: Session = Depends(get_db),
+    current_user: AccountUser = Depends(get_current_user)
+):
+    """Owner tự đổi trạng thái Available <-> Closed"""
+    post = db.query(Post).filter(Post.post_id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Không tìm thấy bài viết")
+    if post.seller_email != current_user.user_email:
+        raise HTTPException(status_code=403, detail="Chỉ người đăng mới có quyền Đóng/Mở bài viết này.")
+        
+    post.open_status = "Closed" if post.open_status == "Available" else "Available"
+    db.commit()
+    
+    return {
+        "message": "Cập nhật trạng thái thành công",
+        "post_id": post_id,
+        "open_status": post.open_status
+    }

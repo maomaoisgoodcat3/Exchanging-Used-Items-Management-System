@@ -6,93 +6,86 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <header class="navbar">
-        <div class="logo" onclick="switchMainTab('tab-posts')" style="cursor:pointer;">UET Market</div>
+    <header class="top-navbar">
+        <div class="logo">UET Market</div>
         
-        <div class="main-nav-tabs">
-            <button class="nav-btn active" onclick="switchMainTab('tab-posts')">Bài Đăng (Posts)</button>
-            <button class="nav-btn" onclick="switchMainTab('tab-campaigns')">Chiến Dịch (Campaigns)</button>
+        <div class="center-toolbar">
+            <input type="text" id="searchInput" placeholder="🔍 Tìm bài viết..." oninput="handleFilterSort()">
+            <select id="filterType" onchange="handleFilterSort()">
+                <option value="">-- Hình thức --</option>
+                <option value="Selling">Bán đồ</option>
+                <option value="Trading">Trao đổi</option>
+                <option value="Donating">Tặng</option>
+            </select>
+            <select id="filterOpenStatus" onchange="handleFilterSort()">
+                <option value="">-- Tình trạng --</option>
+                <option value="Available">Sẵn sàng</option>
+                <option value="Closed">Đã đóng</option>
+            </select>
+            <select id="filterApproval" class="admin-filter hidden" onchange="handleFilterSort()" style="border-color: #dc3545; color: #dc3545; font-weight:bold;">
+                <option value="">-- [Admin] Duyệt --</option>
+                <option value="Pending">Chờ duyệt</option>
+                <option value="Approved">Đã duyệt</option>
+                <option value="Rejected">Từ chối</option>
+            </select>
+            <select id="sortSelect" onchange="handleFilterSort()">
+                <option value="newest">Mới nhất</option>
+                <option value="oldest">Cũ nhất</option>
+            </select>
+            <button class="btn btn-outline" onclick="clearAllFilters()">✖ Xóa</button>
         </div>
 
         <div class="nav-actions">
-            <button id="btnOpenAuth" class="btn btn-outline" onclick="openModal('authModal')">Đăng Nhập / Đăng Ký</button>
-            <button id="btnOpenPost" class="btn btn-primary hidden" onclick="openModal('postModal')">Đăng Bài Mới</button>
+            <button id="btnOpenAuth" class="btn btn-outline" onclick="openModal('authModal')">Đăng Nhập</button>
+            <button id="btnOpenPost" class="btn btn-primary hidden" onclick="openModal('postModal')">Đăng Bài</button>
             <button id="btnProfile" class="btn btn-outline hidden" onclick="openModal('profileModal')">👤 Tài khoản</button>
-            <button id="btnLogout" class="btn btn-danger hidden" onclick="handleLogout()">Đăng Xuất</button>
         </div>
     </header>
 
-    <main class="container">
-        <div id="tab-posts" class="main-tab-content active">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <h2>Thị trường trao đổi</h2>
-                <span id="activeFilterText" style="color: #0d6efd; font-weight: bold; cursor: pointer;" class="hidden" onclick="clearFilter()">✖ Đang lọc 1 bài viết (Xóa lọc)</span>
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div class="sidebar-menu">
+                <button class="side-btn active" onclick="switchMainTab('tab-posts')">🛒 Bài Đăng</button>
+                <button class="side-btn" onclick="switchMainTab('tab-campaigns')">🚩 Chiến Dịch</button>
             </div>
-            <div class="grid-list" id="globalPostsList">
-                <p class="empty-text">Đang tải bài viết...</p>
+        </aside>
+        <main class="main-content">
+            <div id="tab-posts" class="main-tab-content active">
+                <h2>Thị trường trao đổi <span id="activeFilterText" class="filter-badge hidden"></span></h2>
+                <div class="grid-list" id="globalPostsList"><p class="empty-text">Đang tải dữ liệu...</p></div>
             </div>
-        </div>
-
-        <div id="tab-campaigns" class="main-tab-content hidden">
-            <h2>Chiến dịch từ các Tổ chức</h2>
-            <div class="grid-list" id="globalCampaignsList">
-                <p class="empty-text">Chưa có chiến dịch nào.</p>
+            <div id="tab-campaigns" class="main-tab-content hidden">
+                <h2>Chiến dịch từ Tổ chức <span id="activeCampFilterText" class="filter-badge hidden"></span></h2>
+                <div class="grid-list" id="globalCampaignsList"><p class="empty-text">Chưa có chiến dịch nào.</p></div>
             </div>
-        </div>
-    </main>
-
-    <div id="authModal" class="modal-overlay">
-        <div class="modal-content">
-            <span class="close-btn" onclick="closeModal('authModal')">&times;</span>
-            <div class="modal-header">
-                <h3 id="authTitle">Đăng Nhập</h3>
-                <a href="#" onclick="toggleAuthMode()" id="authToggleHint">Chưa có tài khoản? Đăng ký ngay</a>
-            </div>
-            <div class="modal-body">
-                <input type="email" id="authEmail" placeholder="Email (VD: test@vnu.edu.vn)">
-                <input type="text" id="authName" class="hidden" placeholder="Họ và tên">
-                <input type="text" id="authPhone" class="hidden" placeholder="Số điện thoại">
-                <input type="password" id="authPass" placeholder="Mật khẩu">
-                <div id="authMsg" class="msg"></div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-primary w-100" id="btnSubmitAuth" onclick="handleAuth()">Xác Nhận Đăng Nhập</button>
-            </div>
-        </div>
+        </main>
     </div>
 
     <div id="postModal" class="modal-overlay">
-        <div class="modal-content">
+        <div class="modal-content" style="width: 550px;">
             <span class="close-btn" onclick="closeModal('postModal')">&times;</span>
             <div class="modal-header"><h3>Tạo Bài Đăng Mới</h3></div>
             <div class="modal-body">
-                <label>Tiêu đề</label>
-                <input type="text" id="postTitle" placeholder="VD: Bán giáo trình...">
-                <label>Mô tả chi tiết</label>
-                <textarea id="postDesc" rows="3" placeholder="Tình trạng, giá cả..."></textarea>
-                <div class="split-inputs">
-                    <div>
-                        <label>Hình thức</label>
-                        <select id="postCat">
-                            <option value="Selling">Bán đồ</option>
-                            <option value="Trading">Trao đổi</option>
-                            <option value="Donating">Tặng</option>
-                        </select>
+                <input type="text" id="postTitle" placeholder="Tiêu đề...">
+                <textarea id="postDesc" rows="2" placeholder="Mô tả..."></textarea>
+                <select id="postCat">
+                    <option value="Selling">Bán đồ (Selling)</option>
+                    <option value="Trading">Trao đổi (Trading)</option>
+                    <option value="Donating">Tặng (Donating)</option>
+                </select>
+                
+                <div style="background: #f8f9fa; padding: 10px; border-radius: 6px; border: 1px solid #ddd;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <label style="margin:0;">Sản phẩm đi kèm (Bắt buộc ít nhất 1)</label>
+                        <button class="btn btn-outline" style="padding: 2px 8px; font-size: 12px;" onclick="addProductRow()">+ Thêm</button>
                     </div>
-                    <div>
-                        <label>Danh mục</label>
-                        <select id="productCategory">
-                            <option value="1">Dụng cụ học tập</option>
-                            <option value="2">Quần áo</option>
-                            <option value="3">Đồ dùng</option>
-                        </select>
-                    </div>
+                    <div id="dynamicProductList"></div>
                 </div>
+
+                <input type="text" id="postImage" placeholder="URL Ảnh minh họa (Tùy chọn)">
                 <div id="postMsg" class="msg"></div>
             </div>
-            <div class="modal-footer">
-                <button class="btn btn-warning w-100" onclick="handleCreatePost()">Đăng Lên Hệ Thống</button>
-            </div>
+            <div class="modal-footer"><button class="btn btn-warning w-100" onclick="handleCreatePost()">Đăng Lên Hệ Thống</button></div>
         </div>
     </div>
 
@@ -100,24 +93,42 @@
         <div class="modal-content profile-layout">
             <span class="close-btn" onclick="closeModal('profileModal')">&times;</span>
             <div class="profile-sidebar">
-                <button class="prof-tab-btn active" onclick="switchProfileTab('prof-info')">Thông tin cá nhân</button>
-                <button class="prof-tab-btn" onclick="switchProfileTab('prof-password')">Đổi mật khẩu</button>
-                <button class="prof-tab-btn" onclick="switchProfileTab('prof-transactions')">Lịch sử giao dịch</button>
-                <button class="prof-tab-btn" onclick="switchProfileTab('prof-myposts')">Quản lý Bài đăng</button>
+                <div>
+                    <button class="prof-tab-btn active" onclick="switchProfileTab('prof-info')">Thông tin cá nhân</button>
+                    <button class="prof-tab-btn" onclick="switchProfileTab('prof-password')">Đổi mật khẩu</button>
+                    <button class="prof-tab-btn" onclick="switchProfileTab('prof-transactions')">Lịch sử giao dịch</button>
+                    <button class="prof-tab-btn" onclick="switchProfileTab('prof-myposts')">Quản lý Bài đăng</button>
+                </div>
+                <div style="padding: 0 20px;"><button class="btn btn-danger w-100" onclick="handleLogout()">Đăng Xuất</button></div>
             </div>
             <div class="profile-body">
-                <div id="prof-info" class="prof-content active"><h3>Thông tin của bạn</h3><p>(Sẽ gọi API Settings)</p></div>
-                <div id="prof-password" class="prof-content"><h3>Đổi mật khẩu</h3><p>(Sẽ gọi API Auth)</p></div>
-                <div id="prof-transactions" class="prof-content"><h3>Giao dịch</h3><p>(Sẽ gọi API Transactions)</p></div>
-                <div id="prof-myposts" class="prof-content">
-                    <h3>Bài đăng của tôi</h3>
-                    <div id="miniMyPostsList">
-                        </div>
-                </div>
+                <div id="prof-info" class="prof-content active"><h3>Thông tin của bạn</h3><p>(Sẽ cập nhật từ DB)</p></div>
+                <div id="prof-password" class="prof-content"><h3>Đổi mật khẩu</h3><p>(Form đổi pass)</p></div>
+                <div id="prof-transactions" class="prof-content"><h3>Lịch sử giao dịch</h3><p>(Đang tải...)</p></div>
+                <div id="prof-myposts" class="prof-content"><h3>Bài đăng của tôi</h3><div id="miniMyPostsList"></div></div>
             </div>
         </div>
     </div>
 
+    <div id="authModal" class="modal-overlay">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('authModal')">&times;</span>
+            <div class="modal-header">
+                <h3 id="authTitle">Đăng Nhập</h3>
+                <a href="#" onclick="toggleAuthMode()" id="authToggleHint" style="font-size: 13px; color: #0d6efd; text-decoration: none;">Chưa có tài khoản? Đăng ký ngay</a>
+            </div>
+            <div class="modal-body">
+                <input type="email" id="authEmail" placeholder="Email...">
+                <input type="text" id="authName" class="hidden" placeholder="Họ và tên">
+                <input type="text" id="authPhone" class="hidden" placeholder="Số điện thoại">
+                <input type="password" id="authPass" placeholder="Mật khẩu...">
+                <div id="authMsg" class="msg"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary w-100" id="btnSubmitAuth" onclick="handleAuth()">Xác Nhận</button>
+            </div>
+        </div>
+    </div>
     <script src="app.js"></script>
 </body>
 </html>

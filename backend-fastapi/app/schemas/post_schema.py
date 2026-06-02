@@ -92,7 +92,8 @@ class PostBase(BaseModel):
 
 class PostCreate(PostBase):
     seller_email: EmailStr
-    products: List[int] = Field(..., description="List of product_ids from Storage table")
+    # 2. SỬA LẠI DÒNG NÀY (Thay List[int] bằng List[ProductItemCreate])
+    products: List[ProductItemCreate] = Field(..., description="List of detailed products")
     images: Optional[List[PostImageCreate]] = []
 
 
@@ -150,3 +151,11 @@ class PostListRead(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+
+class ProductItemCreate(BaseModel):
+    product_category_id: int
+    product_name: str
+    product_quantity: int = Field(default=1, gt=0)
+    product_price: Decimal = Field(default=Decimal("0.00"), ge=0)
