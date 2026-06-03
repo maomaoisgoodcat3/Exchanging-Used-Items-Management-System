@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useAuth } from "@/hooks/useAuth";
-import { getOrders } from "@/services/orderServices";
-import type { Order, OrderStatus } from "@/types/order";
+import { useAuth } from "../../../hooks/useAuth";
+import { getOrders } from "../../../services/orderServices";
+import type { Order, OrderStatus } from "../../../types/order";
 
 const statusLabels: Record<OrderStatus, string> = {
   PROCESSING: "Đang xử lý",
