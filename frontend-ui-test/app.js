@@ -191,7 +191,6 @@ async function changePassword() {
         else throw new Error((await res.json()).detail);
     } catch (err) { msgBox.className="msg error"; msgBox.innerText=err.message; msgBox.style.display="block"; }
 }
-
 // ==========================================
 // 4. TỔ CHỨC (ORGANIZATIONS)
 // ==========================================
@@ -224,23 +223,24 @@ async function viewOrgDetail(org_email, my_permission) {
         
         const editBtn = document.getElementById('btnEditDesc'); amIManager ? editBtn.classList.remove('hidden') : editBtn.classList.add('hidden');
         
+        // Đã sửa: Member/Poster chỉ thấy Label chứ không thấy Select phân quyền
         document.getElementById('orgMemberList').innerHTML = data.members.map(m => {
-            let actionHtml = `<span class="role-badge role-${m.permission}">${m.permission}</span>`;
             if (amIManager && m.email !== sessionStorage.getItem('user_email')) {
-                actionHtml = `
-                    <select class="action-select" onchange="changeMemberRole('${m.email}', this.value)">
-                        <option value="Manager" ${m.permission === 'Manager'?'selected':''}>👑 Manager (Chuyển giao)</option>
+                return `<div class="member-item"><div class="member-info"><span class="member-name">${m.name}</span><span class="member-email">${m.email}</span></div>
+                    <div><select class="action-select" onchange="changeMemberRole('${m.email}', this.value)">
+                        <option value="Manager" ${m.permission === 'Manager'?'selected':''}>👑 Manager</option>
                         <option value="Poster" ${m.permission === 'Poster'?'selected':''}>📝 Poster</option>
                         <option value="Member" ${m.permission === 'Member'?'selected':''}>👤 Member</option>
-                    </select>`;
+                    </select></div></div>`;
+            } else {
+                return `<div class="member-item"><div class="member-info"><span class="member-name">${m.name}</span><span class="member-email">${m.email}</span></div>
+                    <div><span class="role-badge role-${m.permission}">${m.permission}</span></div></div>`;
             }
-            return `<div class="member-item"><div class="member-info"><span class="member-name">${m.name}</span><span class="member-email">${m.email}</span></div><div>${actionHtml}</div></div>`;
         }).join('');
     } catch (e) { alert("Lỗi tải chi tiết!"); }
 }
 
 function backToOrgList() { document.getElementById('orgListView').classList.remove('hidden'); document.getElementById('orgDetailView').classList.add('hidden'); }
-
 function toggleEditDesc() {
     const form = document.getElementById('editDescForm');
     if (form.classList.contains('hidden')) {
@@ -249,7 +249,6 @@ function toggleEditDesc() {
         document.getElementById('editDescInput').value = currentText === "Chưa có mô tả." ? "" : currentText;
     } else { form.classList.add('hidden'); document.getElementById('btnEditDesc').classList.remove('hidden'); }
 }
-
 async function saveOrgDescription() {
     const newDesc = document.getElementById('editDescInput').value;
     try {
@@ -257,11 +256,9 @@ async function saveOrgDescription() {
             method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('access_token')}` },
             body: JSON.stringify({ description: newDesc })
         });
-        if (res.ok) { alert("Cập nhật thành công!"); toggleEditDesc(); viewOrgDetail(currentViewingOrg, 'Manager'); }
-        else alert((await res.json()).detail);
+        if (res.ok) { alert("Cập nhật thành công!"); toggleEditDesc(); viewOrgDetail(currentViewingOrg, 'Manager'); } else alert((await res.json()).detail);
     } catch(e) { alert("Lỗi kết nối Server"); }
 }
-
 async function addOrgMember() {
     const email = document.getElementById('newMemEmail').value;
     try {
@@ -269,11 +266,9 @@ async function addOrgMember() {
             method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('access_token')}` },
             body: JSON.stringify({ user_email: email })
         });
-        if (res.ok) { alert("Thêm thành công!"); document.getElementById('newMemEmail').value = ''; viewOrgDetail(currentViewingOrg, 'Manager'); }
-        else alert((await res.json()).detail);
+        if (res.ok) { alert("Thêm thành công!"); document.getElementById('newMemEmail').value = ''; viewOrgDetail(currentViewingOrg, 'Manager'); } else alert((await res.json()).detail);
     } catch (e) { alert("Lỗi Server"); }
 }
-
 async function changeMemberRole(mem_email, new_role) {
     if(new_role === 'Manager' && !confirm(`CẢNH BÁO: Chuyển quyền Manager sẽ khiến bạn mất quyền. Tiếp tục?`)) { viewOrgDetail(currentViewingOrg, 'Manager'); return; }
     try {
@@ -285,17 +280,13 @@ async function changeMemberRole(mem_email, new_role) {
         else alert((await res.json()).detail);
     } catch (e) { alert("Lỗi Server"); }
 }
-
-function viewOrgCampaigns() {
-    closeModal('profileModal'); switchMainTab('tab-campaigns');
-    setTimeout(() => { loadCampaigns(currentViewingOrg); }, 100);
-}
+function viewOrgCampaigns() { closeModal('profileModal'); switchMainTab('tab-campaigns'); setTimeout(() => { loadCampaigns(currentViewingOrg); }, 100); }
 
 // ==========================================
-// 5. QUẢN LÝ CHIẾN DỊCH (TỰ ĐỘNG UPLOAD & DUYỆT BÀI)
+// 5. QUẢN LÝ CHIẾN DỊCH (ẢNH CLOUD, REJECT, RESENDING)
 // ==========================================
+let myOrgRoles = {}; 
 
-// Sự kiện xem trước ảnh Upload
 document.getElementById('campImageFile')?.addEventListener('change', function(e) {
     const file = e.target.files[0];
     if(file) {
@@ -304,20 +295,38 @@ document.getElementById('campImageFile')?.addEventListener('change', function(e)
     } else document.getElementById('imgPreview').classList.add('hidden');
 });
 
-// Hàm Upload tự động lên ImgBB (Cloud Free)
+// Fix lỗi Upload Cloud: Ép kiểu File sang chuỗi Base64
+const toBase64 = file => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = error => reject(error);
+});
+
 async function uploadImageToImgBB(file) {
-    const formData = new FormData(); formData.append('image', file);
-    const IMGBB_API_KEY = "63a6a1d82136e0952086fc505c2196fb"; // API Test
-    const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, { method: 'POST', body: formData });
-    const data = await res.json();
-    if(data.success) return data.data.url;
-    throw new Error("Lỗi upload ảnh lên Cloud");
+    try {
+        const base64Img = await toBase64(file);
+        const formData = new FormData(); 
+        formData.append('key', '63a6a1d82136e0952086fc505c2196fb'); 
+        formData.append('image', base64Img); 
+        
+        const res = await fetch(`https://api.imgbb.com/1/upload`, { method: 'POST', body: formData });
+        const data = await res.json();
+        if(data.success) return data.data.url;
+    } catch (e) { console.error("ImgBB Error:", e); }
+    throw new Error("Lỗi Upload ảnh Cloud!");
 }
+
+const oldSwitchMainTab = switchMainTab;
+switchMainTab = function(tabId) {
+    oldSwitchMainTab(tabId);
+    if(tabId === 'tab-campaigns') { document.getElementById('activeCampFilterText').classList.add('hidden'); loadCampaigns(); }
+};
 
 async function loadCampaigns(orgEmailFilter = null) {
     const list = document.getElementById('globalCampaignsList');
     list.innerHTML = '<p class="empty-text">Đang tải...</p>';
-    checkCampaignCreatePermission();
+    await checkCampaignCreatePermission(); 
 
     try {
         let url = `${API_URL}/campaigns/`;
@@ -325,77 +334,79 @@ async function loadCampaigns(orgEmailFilter = null) {
 
         const headers = {};
         const token = sessionStorage.getItem('access_token');
-        if(token) headers['Authorization'] = `Bearer ${token}`; // Nhúng Token để Backend nhận biết Admin
+        if(token) headers['Authorization'] = `Bearer ${token}`;
 
         const res = await fetch(url, { headers });
-        const data = await res.json();
-        
+        let data = await res.json();
         if(data.length === 0) return list.innerHTML = '<p class="empty-text" style="grid-column: 1 / -1; text-align:center;">Chưa có chiến dịch nào.</p>';
 
         list.innerHTML = data.map(c => {
-            const statusColor = c.approval === 'Approved' ? '#198754' : (c.approval === 'Pending' ? '#ffc107' : '#dc3545');
-            const statusText = c.approval === 'Pending' ? 'black' : 'white';
+            const isOwner = !!myOrgRoles[c.org_email]; // Đã fix tên biến
             
-            // Logic hiển thị Nút Admin Duyệt/Từ chối bài Pending
+            // CHỈ HIỆN MÁC VỚI ADMIN HOẶC CHỦ TỔ CHỨC
+            let statusHtml = '';
+            if (currentUserRole === 'Admin' || isOwner) {
+                let bgColor = '#198754'; let textColor = 'white';
+                if (c.approval === 'Pending') { bgColor = '#ffc107'; textColor = 'black'; }
+                else if (c.approval === 'Resending') { bgColor = '#17a2b8'; textColor = 'white'; }
+                else if (c.approval === 'Rejected') { bgColor = '#dc3545'; textColor = 'white'; }
+                statusHtml = `<span style="font-size: 11px; background: ${bgColor}; color: ${textColor}; padding: 4px 8px; border-radius: 12px; float: right; font-weight:bold;">${c.approval}</span>`;
+            }
+
+            // Nút duyệt của Admin
             let adminActions = '';
-            if (currentUserRole === 'Admin' && c.approval === 'Pending') {
+            if (currentUserRole === 'Admin' && (c.approval === 'Pending' || c.approval === 'Resending')) {
                 adminActions = `
                     <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #ccc; display:flex; gap:10px;">
                         <button class="btn btn-primary" style="flex:1; padding: 5px; font-size:12px;" onclick="reviewCampaign(${c.campaign_id}, 'approve', event)">✅ Duyệt</button>
                         <button class="btn btn-danger" style="flex:1; padding: 5px; font-size:12px;" onclick="reviewCampaign(${c.campaign_id}, 'reject', event)">❌ Từ chối</button>
+                    </div>`;
+            }
+
+            // Khung Báo lỗi + Nút sửa cho Manager/Poster
+            let rejectHtml = '';
+            if (c.approval === 'Rejected' && isOwner) {
+                rejectHtml = `
+                    <div style="background: #ffeeba; color: #856404; padding: 10px; border-radius: 6px; font-size: 12px; margin-bottom: 10px; margin-top: 10px;">
+                        <b>⚠️ Lý do từ chối:</b> ${c.reject_reason || 'Không có lý do'}
                     </div>
+                    <button class="btn btn-warning" style="width: 100%; font-size: 13px; padding: 6px;" onclick="openEditCampaign(${c.campaign_id}, '${c.org_email}', '${c.title.replace(/'/g, "\\'")}', '${(c.description||'').replace(/'/g, "\\'")}', '${c.start_date}', '${c.end_date}', '${c.thumbnail_url||''}', event)">✏️ Chỉnh sửa & Gửi lại duyệt</button>
                 `;
             }
 
             return `
-            <div style="background:white; border-radius:8px; border:1px solid #ddd; overflow: hidden; display: flex; flex-direction: column; cursor:pointer;" 
-                 onclick="viewCampaignPosts(${c.campaign_id}, '${c.title}')">
-                
-                ${c.thumbnail_url 
-                    ? `<img src="${c.thumbnail_url}" style="width:100%; height:160px; object-fit:cover; border-bottom: 1px solid #eee;">` 
-                    : `<div style="width:100%; height:160px; background:#f8f9fa; display:flex; align-items:center; justify-content:center; color:#ccc; border-bottom: 1px solid #eee;">Chưa có ảnh</div>`}
-                
+            <div style="background:white; border-radius:8px; border:1px solid #ddd; overflow: hidden; display: flex; flex-direction: column; cursor:pointer;" onclick="viewCampaignPosts(${c.campaign_id}, '${c.title}')">
+                ${c.thumbnail_url ? `<img src="${c.thumbnail_url}" style="width:100%; height:160px; object-fit:cover; border-bottom: 1px solid #eee;">` : `<div style="width:100%; height:160px; background:#f8f9fa; display:flex; align-items:center; justify-content:center; color:#ccc; border-bottom: 1px solid #eee;">Chưa có ảnh</div>`}
                 <div style="padding: 15px; flex: 1; display: flex; flex-direction: column;">
-                    <div style="margin-bottom: 10px;">
-                        <span style="font-size: 11px; background: #e9ecef; padding: 4px 8px; border-radius: 12px; color: #555; font-weight:bold;">🏛️ ${c.org_name}</span>
-                        <span style="font-size: 11px; background: ${statusColor}; color: ${statusText}; padding: 4px 8px; border-radius: 12px; float: right; font-weight:bold;">${c.approval}</span>
-                    </div>
-                    
+                    <div style="margin-bottom: 10px;"><span style="font-size: 11px; background: #e9ecef; padding: 4px 8px; border-radius: 12px; color: #555; font-weight:bold;">🏛️ ${c.org_name}</span>${statusHtml}</div>
                     <h3 style="margin: 0 0 10px; color: #0d6efd; font-size: 16px;">${c.title}</h3>
-                    
                     <div style="font-size: 12px; color: #666; margin-top: auto; background: #f8f9fa; padding: 10px; border-radius: 6px;">
-                        <b>Bắt đầu:</b> ${new Date(c.start_date).toLocaleDateString('vi-VN')} <br>
-                        <b>Kết thúc:</b> ${new Date(c.end_date).toLocaleDateString('vi-VN')}
+                        <b>Bắt đầu:</b> ${new Date(c.start_date).toLocaleDateString('vi-VN')} <br><b>Kết thúc:</b> ${new Date(c.end_date).toLocaleDateString('vi-VN')}
                     </div>
+                    ${rejectHtml}
                     ${adminActions}
                 </div>
             </div>`;
         }).join('');
-    } catch (e) { list.innerHTML = '<p class="empty-text error">Lỗi tải dữ liệu chiến dịch</p>'; }
+    } catch (e) { list.innerHTML = '<p class="empty-text error">Lỗi tải dữ liệu</p>'; }
 }
 
-// Chuyển hướng sang Post & Filter
 function viewCampaignPosts(campaignId, title) {
     switchMainTab('tab-posts');
     const filterText = document.getElementById('activeFilterText');
-    if(filterText) {
-        filterText.innerText = `(Chiến dịch: ${title})`;
-        filterText.classList.remove('hidden');
-    }
+    if(filterText) { filterText.innerText = `(Chiến dịch: ${title})`; filterText.classList.remove('hidden'); }
 }
 
-// Admin thao tác Duyệt/Từ chối
 async function reviewCampaign(id, action, event) {
-    event.stopPropagation(); // Ngăn click lan ra thẻ xem chi tiết Post
+    event.stopPropagation(); 
     let reason = null;
     if (action === 'reject') {
-        reason = prompt("Nhập lý do từ chối chiến dịch này:");
-        if (reason === null) return;
+        reason = prompt("Nhập lý do từ chối chiến dịch này (Bắt buộc):");
+        if (!reason) { alert("Phải nhập lý do từ chối!"); return; }
     }
     try {
         const res = await fetch(`${API_URL}/campaigns/${id}/approve`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('access_token')}` },
+            method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('access_token')}` },
             body: JSON.stringify({ action: action, reject_reason: reason })
         });
         if (res.ok) { alert("Thao tác thành công!"); loadCampaigns(); } else alert("Lỗi hệ thống!");
@@ -403,74 +414,82 @@ async function reviewCampaign(id, action, event) {
 }
 
 async function checkCampaignCreatePermission() {
+    myOrgRoles = {}; 
     const btn = document.getElementById('btnOpenCreateCampaign');
     const select = document.getElementById('campOrgEmail');
     if(!btn) return;
     
-    btn.classList.add('hidden');
-    select.innerHTML = '<option value="">-- Chọn Tổ chức của bạn --</option>';
-
+    btn.classList.add('hidden'); select.innerHTML = '<option value="">-- Chọn Tổ chức của bạn --</option>';
     const token = sessionStorage.getItem('access_token');
-    if(!token || currentUserRole === 'Admin') return; // Admin không cần nút tạo chiến dịch
+    if(!token) return; 
 
     try {
         const res = await fetch(`${API_URL}/users/my-organizations`, { headers: { 'Authorization': `Bearer ${token}` }});
         if(res.ok) {
             const orgs = await res.json();
             const validOrgs = orgs.filter(o => o.my_permission === 'Manager' || o.my_permission === 'Poster');
-            if(validOrgs.length > 0) {
-                btn.classList.remove('hidden');
-                validOrgs.forEach(o => select.insertAdjacentHTML('beforeend', `<option value="${o.org_email}">${o.org_name}</option>`));
-            }
+            if(validOrgs.length > 0 && currentUserRole !== 'Admin') btn.classList.remove('hidden');
+            validOrgs.forEach(o => {
+                myOrgRoles[o.org_email] = o.my_permission; 
+                select.insertAdjacentHTML('beforeend', `<option value="${o.org_email}">${o.org_name}</option>`);
+            });
         }
     } catch(e) {}
 }
 
-async function handleCreateCampaign() {
+function openEditCampaign(id, orgEmail, title, desc, start, end, imgUrl, event) {
+    event.stopPropagation();
+    document.getElementById('campModalTitle').innerText = "Chỉnh Sửa & Gửi Lại Duyệt";
+    document.getElementById('campEditId').value = id;
+    document.getElementById('campOrgEmail').value = orgEmail;
+    document.getElementById('campTitle').value = title;
+    document.getElementById('campDesc').value = desc;
+    if(start) document.getElementById('campStart').value = start.substring(0, 16);
+    if(end) document.getElementById('campEnd').value = end.substring(0, 16);
+    
+    document.getElementById('campExistingImage').value = imgUrl || "";
+    if(imgUrl) { document.getElementById('imgPreview').classList.remove('hidden'); document.getElementById('previewImgTag').src = imgUrl; }
+    openModal('campaignModal');
+}
+
+async function handleSubmitCampaign() {
     const msgBox = document.getElementById('campMsg');
     const btn = document.getElementById('btnSubmitCamp');
     msgBox.style.display = 'none'; btn.disabled = true;
 
+    const editId = document.getElementById('campEditId').value;
     const orgEmail = document.getElementById('campOrgEmail').value;
     const title = document.getElementById('campTitle').value;
     const desc = document.getElementById('campDesc').value;
     const start = document.getElementById('campStart').value;
     const end = document.getElementById('campEnd').value;
     const fileInput = document.getElementById('campImageFile');
+    let imageUrl = document.getElementById('campExistingImage').value;
 
     try {
         if(!orgEmail || !title || !desc || !start || !end) throw new Error("Vui lòng điền đủ thông tin bắt buộc!");
+        if(fileInput.files.length > 0) { btn.innerText = "Đang Upload ảnh lên Cloud..."; imageUrl = await uploadImageToImgBB(fileInput.files[0]); }
+        btn.innerText = "Đang xử lý...";
         
-        let imageUrl = "";
-        // Nếu có ảnh, gọi ImgBB upload
-        if(fileInput.files.length > 0) {
-            btn.innerText = "Đang Upload ảnh lên Cloud...";
-            imageUrl = await uploadImageToImgBB(fileInput.files[0]);
-        }
-
-        btn.innerText = "Đang gửi yêu cầu tạo Chiến dịch...";
         const payload = {
             org_email: orgEmail, title: title, description: desc,
             start_date: new Date(start).toISOString(), end_date: new Date(end).toISOString(),
-            images: imageUrl ? [imageUrl] : []
+            image_url: imageUrl
         };
-
-        const res = await fetch(`${API_URL}/campaigns/`, {
-            method: 'POST',
+        const endpoint = editId ? `${API_URL}/campaigns/${editId}` : `${API_URL}/campaigns/`;
+        const res = await fetch(endpoint, {
+            method: editId ? 'PUT' : 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('access_token')}` },
             body: JSON.stringify(payload)
         });
-        
         if(res.ok) {
-            alert("Tạo Chiến dịch thành công! Vui lòng chờ Admin duyệt.");
-            closeModal('campaignModal');
-            document.getElementById('campTitle').value = ''; document.getElementById('campDesc').value = '';
-            document.getElementById('imgPreview').classList.add('hidden'); fileInput.value = '';
+            alert(editId ? "Gửi lại kiểm duyệt thành công!" : "Tạo Chiến dịch thành công!");
+            closeModal('campaignModal'); document.getElementById('campEditId').value = ''; 
+            document.getElementById('campTitle').value = ''; document.getElementById('campDesc').value = ''; 
+            document.getElementById('imgPreview').classList.add('hidden'); fileInput.value = ''; document.getElementById('campExistingImage').value = '';
+            document.getElementById('campModalTitle').innerText = "Khởi Tạo Chiến Dịch";
             loadCampaigns();
         } else throw new Error((await res.json()).detail || "Lỗi tạo chiến dịch");
-    } catch (e) {
-        msgBox.className = "msg error"; msgBox.innerText = e.message; msgBox.style.display = "block";
-    } finally {
-        btn.disabled = false; btn.innerText = "Gửi Yêu Cầu Duyệt";
-    }
+    } catch (e) { msgBox.className = "msg error"; msgBox.innerText = e.message; msgBox.style.display = "block"; } 
+    finally { btn.disabled = false; btn.innerText = "Gửi Yêu Cầu Duyệt"; }
 }

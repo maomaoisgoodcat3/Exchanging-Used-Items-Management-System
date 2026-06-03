@@ -58,9 +58,12 @@
         <div class="modal-content" style="width: 550px;">
             <span class="close-btn" onclick="closeModal('campaignModal')">&times;</span>
             <div class="modal-header">
-                <h3>Khởi Tạo Chiến Dịch</h3>
+                <h3 id="campModalTitle">Khởi Tạo Chiến Dịch</h3>
             </div>
             <div class="modal-body">
+                <!-- Chứa ID ẩn để phân biệt Tạo mới hay Chỉnh sửa -->
+                <input type="hidden" id="campEditId" value="">
+                
                 <label style="font-size: 13px; font-weight: bold; color: gray;">Đại diện cho Tổ chức <span style="color:red">*</span></label>
                 <select id="campOrgEmail" class="mb-10" style="padding:8px; border-radius:6px; border:1px solid #ccc; width:100%;">
                     <option value="">-- Chọn Tổ chức của bạn --</option>
@@ -73,26 +76,23 @@
                 <textarea id="campDesc" class="mb-10" rows="3" placeholder="Mục đích..." style="padding:8px; border-radius:6px; border:1px solid #ccc; width:100%;"></textarea>
                 
                 <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                    <div style="flex: 1;">
-                        <label style="font-size: 13px; font-weight: bold; color: gray;">Ngày bắt đầu <span style="color:red">*</span></label>
-                        <input type="datetime-local" id="campStart" style="padding:8px; border-radius:6px; border:1px solid #ccc; width:100%;">
-                    </div>
-                    <div style="flex: 1;">
-                        <label style="font-size: 13px; font-weight: bold; color: gray;">Ngày kết thúc <span style="color:red">*</span></label>
-                        <input type="datetime-local" id="campEnd" style="padding:8px; border-radius:6px; border:1px solid #ccc; width:100%;">
-                    </div>
+                    <div style="flex: 1;"><label style="font-size: 13px; color: gray;">Bắt đầu</label><input type="datetime-local" id="campStart" style="padding:8px; border-radius:6px; border:1px solid #ccc; width:100%;"></div>
+                    <div style="flex: 1;"><label style="font-size: 13px; color: gray;">Kết thúc</label><input type="datetime-local" id="campEnd" style="padding:8px; border-radius:6px; border:1px solid #ccc; width:100%;"></div>
                 </div>
 
                 <label style="font-size: 13px; font-weight: bold; color: gray;">Hình ảnh minh họa (Chọn từ máy)</label>
                 <input type="file" id="campImageFile" accept="image/*" class="mb-10" style="border: none; padding: 0; width:100%;">
+                
+                <!-- Lưu URL ảnh cũ nếu không chọn file mới -->
+                <input type="hidden" id="campExistingImage" value="">
+                
                 <div id="imgPreview" class="hidden mb-10" style="text-align: center; background: #f8f9fa; padding: 10px; border-radius: 6px;">
                     <img id="previewImgTag" src="" style="max-width: 100%; max-height: 150px; border-radius: 4px;">
                 </div>
-                
                 <div id="campMsg" class="msg"></div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-primary w-100" id="btnSubmitCamp" onclick="handleCreateCampaign()">Gửi Yêu Cầu Duyệt Lên Admin</button>
+                <button class="btn btn-primary w-100" id="btnSubmitCamp" onclick="handleSubmitCampaign()">Gửi Yêu Cầu Duyệt</button>
             </div>
         </div>
     </div>
