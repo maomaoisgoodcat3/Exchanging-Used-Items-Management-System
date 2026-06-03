@@ -2,58 +2,85 @@
 from fastapi import APIRouter, HTTPException, status, Depends, Query
 from typing import Optional, List
 from decimal import Decimal
-from schemas.post_schema import (
+from app.schemas.post_schema import (
     PostCreate, PostUpdate, PostRead, PostDetailRead, PostListRead,
     PostFilter, PostApprovalAction, PostProductCreate, PostImageCreate
 )
-
+from app.services.post_svc import (
+    PostCategory, AvailabilityStatus, ApprovalStatus
+)
+from sqlalchemy.orm import Session
+from app.core.database import get_db
+from app.services.auth_svc import get_current_user
+from app.models.posts import Posts, PostProducts, ProductImages, PostApprovalStatus, PostAvailabilityStatus
+from app.models.users import Users
 router = APIRouter(prefix="/api/v1/posts", tags=["Posts"])
 
 
-@router.get("/", response_model=PostListRead)
+# 1. API CHO USER THƯỜNG (Chỉ lấy bài đã duyệt)
+@router.get("/", response_model=list)
 def list_posts(
     post_category: Optional[str] = None,
-    search: Optional[str] = None,
-    status: Optional[str] = None,
-    sort_by: str = "created_at",
-    sort_order: str = "desc",
     limit: int = 20,
-    skip: int = 0
+    skip: int = 0,
+    db: Session = Depends(get_db)
 ):
-    """
-    List all posts with filtering and sorting
+    posts = db.query(Posts).filter(
+        Posts.approval == PostApprovalStatus.Approved
+    ).order_by(Posts.created_at.desc()).offset(skip).limit(limit).all()
     
-    Database: Posts table
-    - Filters by post_category (Selling, Trading, Donating)
-    - Filters by status (Pending, Approved, Rejected, Sold, Closed)
-    - Searches in title and description
-    
-    - **post_category**: Selling, Trading, Donating
-    - **search**: Search by title or description
-    - **status**: Filter by status
-    - **sort_by**: created_at, title
-    - **sort_order**: asc, desc
-    - **limit**: Results per page (max 100)
-    - **skip**: Pagination offset
-    """
-    return {
-        "data": [
-            {
-                "post_id": 1,
-                "title": "Used Laptop",
-                "post_category": "Selling",
-                "price": Decimal("500.00"),
-                "status": "Approved",
-                "seller_email": "seller@uet.edu.vn",
-                "created_at": "2024-05-31T15:39:31"
-            }
-        ],
-        "total": 100,
-        "limit": limit,
-        "skip": skip
-    }
+    return [{
+        "post_id": p.post_id,
+        "title": p.title,
+        "description": p.description,
+        "seller_email": p.seller_email,
+        "post_category": p.post_type.value if hasattr(p.post_type, 'value') else str(p.post_type),
+        "status": "Approved", # User thường không cần biết trạng thái thực sự
+        "availability": p.availability.value if hasattr(p.availability, 'value') else str(p.availability)
+    } for p in posts]
+
+# 2. API CHO ADMIN (Lấy mọi bài viết)
+@router.get("/admin-all", response_model=list)
+def get_all_posts_admin(
+    db: Session = Depends(get_db),
+    current_user: Users = Depends(get_current_user)
+):
+    if getattr(current_user, "role", None) != "Admin":
+        raise HTTPException(status_code=403, detail="Chỉ Admin mới có quyền xem toàn bộ bài viết.")
+        
+    posts = db.query(Posts).order_by(Posts.created_at.desc()).all()
+    return [{
+        "post_id": p.post_id,
+        "title": p.title,
+        "description": p.description,
+        "seller_email": p.seller_email,
+        "post_category": p.post_type.value if hasattr(p.post_type, 'value') else str(p.post_type),
+        "approval": p.approval.value if hasattr(p.approval, 'value') else str(p.approval),
+        "availability": p.availability.value if hasattr(p.availability, 'value') else str(p.availability),
+        "reject_reason": getattr(p, 'reject_reason', None)
+    } for p in posts]
+
+# 3. API CHO NGƯỜI ĐĂNG BÀI (Lấy mọi bài của chính họ)
+@router.get("/my-posts", response_model=list)
+def get_my_posts(
+    db: Session = Depends(get_db), 
+    current_user: Users = Depends(get_current_user)
+):
+    posts = db.query(Posts).filter(Posts.seller_email == current_user.user_email).order_by(Posts.created_at.desc()).all()
+    return [{
+        "post_id": p.post_id,
+        "title": p.title,
+        "description": p.description,
+        "seller_email": p.seller_email,
+        "post_category": p.post_type.value if hasattr(p.post_type, 'value') else str(p.post_type),
+        "approval": p.approval.value if hasattr(p.approval, 'value') else str(p.approval),
+        "availability": p.availability.value if hasattr(p.availability, 'value') else str(p.availability),
+        "reject_reason": getattr(p, 'reject_reason', None)
+    } for p in posts]
 
 
+
+@router.post("/", response_model=dict, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=dict, status_code=status.HTTP_201_CREATED)
 def create_post(
     data: PostCreate,
@@ -68,7 +95,8 @@ def create_post(
     - title: Post title
     - description: Detailed description
     - campaign_id: Optional - if participating in campaign
-    - status: Default 'Pending' - needs admin approval
+    - availability: Default 'Open' - available for sale/trading/donation
+    - approval: Default 'Pending' - needs admin approval
     
     - **title**: Post title
     - **description**: Detailed description
@@ -86,10 +114,10 @@ def create_post(
         "message": "Post created successfully",
         "post_id": 1,
         "seller_email": current_user,
-        "status": "Pending",
+        "availability": "Open",
+        "approval": "Pending",
         "created_at": "2024-05-31T15:39:31"
     }
-
 
 @router.get("/{post_id}", response_model=PostDetailRead)
 def get_post_detail(post_id: int):
@@ -108,7 +136,8 @@ def get_post_detail(post_id: int):
         "title": "Used Laptop",
         "description": "Excellent condition laptop for sale",
         "post_category": "Selling",
-        "status": "Approved",
+        "availability": "Open",
+        "approval": "Approved",
         "seller_email": "seller@uet.edu.vn",
         "campaign_id": None,
         "created_at": "2024-05-31T15:39:31",
@@ -121,7 +150,7 @@ def get_post_detail(post_id: int):
 def update_post(
     post_id: int,
     data: PostUpdate,
-    current_user: str = Depends()
+    current_user: Users = Depends(get_current_user)
 ):
     """
     Update post information (owner only, if not approved)
@@ -137,7 +166,7 @@ def update_post(
 
 
 @router.delete("/{post_id}", response_model=dict)
-def delete_post(post_id: int, current_user: str = Depends()):
+def delete_post(post_id: int, current_user: Users = Depends(get_current_user)):
     """
     Delete a post (owner or admin only)
     
@@ -153,7 +182,7 @@ def delete_post(post_id: int, current_user: str = Depends()):
 @router.post("/{post_id}/mark-sold", response_model=dict)
 def mark_post_sold(
     post_id: int,
-    current_user: str = Depends()
+    current_user: Users = Depends(get_current_user)
 ):
     """
     Mark post as sold
@@ -169,25 +198,33 @@ def mark_post_sold(
     }
 
 
-@router.post("/{post_id}/approve", response_model=dict)
-def approve_post(
-    post_id: int,
-    data: PostApprovalAction,
-    current_user: str = Depends()
-):
-    """
-    Approve/Reject post (admin only)
-    
-    Database: Posts table
-    - Updates status (Approved/Rejected)
-    - Sets reviewed_by and reviewed_at
-    - Sets reject_reason if rejected
-    """
-    return {
-        "message": f"Post {data.action}",
-        "post_id": post_id,
-        "status": data.action
-    }
+@staticmethod
+def handle_approval_action(current_status: str, action: str, reject_reason: Optional[str] = None) -> tuple[Optional[str], bool, Optional[str]]:
+        """
+        Handle approval action and determine new status.
+
+        Args:
+            current_status: Current approval status
+            action: Action to perform (approve, reject, resend)
+            reject_reason: Reason for rejection
+
+        Returns:
+            Tuple of (new_status, is_valid, error_message)
+        """
+        valid_actions = ["approve", "reject", "resend"]
+        if action not in valid_actions:
+            return None, False, f"Invalid action. Must be one of {valid_actions}"
+
+        if action == "approve":
+            return ApprovalStatus.APPROVED.value, True, None
+        elif action == "reject":
+            if not reject_reason:
+                return None, False, "Reject reason is required for rejection"
+            return ApprovalStatus.REJECTED.value, True, None
+        elif action == "resend":
+            return ApprovalStatus.RESENDING.value, True, None
+
+        return None, False, f"Invalid action. Must be one of {valid_actions}"
 
 
 @router.get("/{post_id}/products", response_model=List[dict])
@@ -212,7 +249,7 @@ def get_post_products(post_id: int):
 def add_product_to_post(
     post_id: int,
     storage_product_ids: List[int],
-    current_user: str = Depends()
+    current_user: Users = Depends(get_current_user)
 ):
     """
     Add storage products to post
@@ -231,7 +268,7 @@ def add_product_to_post(
 def remove_product_from_post(
     post_id: int,
     product_id: int,
-    current_user: str = Depends()
+    current_user: Users = Depends(get_current_user)
 ):
     """
     Remove product from post
@@ -250,7 +287,7 @@ def remove_product_from_post(
 def add_image_to_post(
     post_id: int,
     data: PostImageCreate,
-    current_user: str = Depends()
+    current_user: Users = Depends(get_current_user)
 ):
     """
     Add image to post
@@ -269,7 +306,7 @@ def add_image_to_post(
 def remove_image_from_post(
     post_id: int,
     image_id: int,
-    current_user: str = Depends()
+    current_user: Users = Depends(get_current_user)
 ):
     """
     Remove image from post
@@ -301,3 +338,29 @@ def get_similar_posts(post_id: int, limit: int = 10):
             "status": "Approved"
         }
     ]
+
+
+@router.put("/{post_id}/toggle-status", response_model=dict)
+def toggle_post_status(
+    post_id: int,
+    db: Session = Depends(get_db),
+    current_user: Users = Depends(get_current_user)
+):
+    """Owner tự đổi trạng thái Available <-> Closed"""
+    post = db.query(Posts).filter(Posts.post_id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Không tìm thấy bài viết")
+    if post.seller_email != current_user.user_email:
+        raise HTTPException(status_code=403, detail="Chỉ người đăng mới có quyền Đóng/Mở bài viết này.")
+        
+    # use setattr but first cast the attribute to str to satisfy static type checks
+    from typing import cast
+    current_availability = cast(str, getattr(post, "availability"))
+    setattr(post, "availability", "Closed" if current_availability == "Available" else "Available")
+    db.commit()
+    
+    return {
+        "message": "Cập nhật trạng thái thành công",
+        "post_id": post_id,
+        "availability": post.availability
+    }

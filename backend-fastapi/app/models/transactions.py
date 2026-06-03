@@ -1,6 +1,7 @@
 # app/models/transaction.py
 from sqlalchemy import Column, Integer, String, Enum, DateTime, ForeignKey, Text, Numeric
 from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 import enum
 from app.core.database import Base
 
@@ -12,26 +13,33 @@ class TransactionStatusEnum(str, enum.Enum):
 
 class OrderStatusEnum(str, enum.Enum):
     Pending = "Pending"
-    Ready_for_pickup = "Ready_for_pickup"
+    Ready_for_pickup = "Ready for pickup"
     Cancelled = "Cancelled"
     Successful = "Successful"
 
-class Transaction(Base):
+class Transactions(Base):
     __tablename__ = "transactions"
     transaction_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     post_id = Column(Integer, ForeignKey("posts.post_id"), nullable=False)
-    buyer_email = Column(String(100), ForeignKey("account_user.user_email"), nullable=False)
+    product_id = Column(Integer, ForeignKey('Storage.product_id'), nullable=False)
+    buyer_email = Column(String(100), ForeignKey("users.email"), nullable=False)
     quantity = Column(Integer, default=1)
     service_fee = Column(Numeric(15, 2), default=0.00)
-    transaction_date = Column(DateTime, server_default=func.now())
     order_status = Column(Enum(OrderStatusEnum), default=OrderStatusEnum.Pending)
     transaction_status = Column(Enum(TransactionStatusEnum), default=TransactionStatusEnum.Pending)
+    transaction_date = Column(DateTime, server_default=func.now())
 
-class Setting(Base):
+    buyer = relationship("Users", back_populates="transactions")
+    product = relationship("Storage", back_populates="transactions")
+
+
+class Settings(Base):
     __tablename__ = "settings"
     setting_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     setting_name = Column(String(100), nullable=False)
     setting_value = Column(Numeric(15, 2), nullable=False)
     description = Column(Text)
-    last_update = Column(DateTime, server_default=func.now(), onupdate=func.now())
-    updated_by = Column(String(100), ForeignKey("account_user.user_email"))
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    updated_by = Column(String(100), ForeignKey("users.user_email"))
+
+    updater = relationship("Users", back_populates="updated_settings")

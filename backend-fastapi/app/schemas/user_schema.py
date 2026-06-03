@@ -125,3 +125,9 @@ class PasswordResetRequest(BaseModel):
 class PasswordReset(BaseModel):
     token: str
     new_password: str = Field(..., min_length=6)
+
+class User_Response:
+    pass
+
+class Token:
+    pass

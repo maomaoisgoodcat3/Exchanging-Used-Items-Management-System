@@ -2,7 +2,7 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from typing import Optional, List
 from decimal import Decimal
-from schemas.transaction_schema import (
+from app.schemas.transaction_schema import (
     TransactionCreate, TransactionRead, TransactionFilter, TransactionStatusUpdate,
     PaymentInitiate, PaymentConfirm, CartItemCreate, CartRead, ReturnRequestCreate,
     SettingsCreate, SettingsRead
@@ -101,7 +101,7 @@ def update_transaction_status(
     transaction_id: int,
     order_status: Optional[str] = None,
     transaction_status: Optional[str] = None,
-    current_user: str = Depends() = None
+    current_user: str = Depends()
 ):
     """
     Update transaction status

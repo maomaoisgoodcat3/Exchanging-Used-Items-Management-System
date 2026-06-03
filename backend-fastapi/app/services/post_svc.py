@@ -6,23 +6,20 @@ from enum import Enum
 
 logger = logging.getLogger(__name__)
 
-
-class PostStatus(str, Enum):
-    """Post status enumeration."""
-
-    PENDING = "Pending"
-    APPROVED = "Approved"
-    REJECTED = "Rejected"
-    SOLD = "Sold"
-    CLOSED = "Closed"
-
-
 class PostCategory(str, Enum):
     """Post category enumeration."""
 
     SELLING = "Selling"
     TRADING = "Trading"
     DONATING = "Donating"
+
+
+class AvailabilityStatus(str, Enum):
+    """Availability status enumeration."""
+
+    OPEN = "Open"
+    SOLD = "Sold"
+    CLOSED = "Closed"
 
 
 class ApprovalStatus(str, Enum):
@@ -83,7 +80,7 @@ class PostService:
         Returns:
             True if post can be edited, False otherwise
         """
-        editable_statuses = [PostStatus.PENDING.value, PostStatus.REJECTED.value]
+        editable_statuses = [ApprovalStatus.PENDING.value, ApprovalStatus.REJECTED.value]
         return current_status in editable_statuses
 
     @staticmethod
@@ -97,29 +94,41 @@ class PostService:
         Returns:
             New status after edit
         """
-        if current_status == PostStatus.PENDING.value:
-            return PostStatus.PENDING.value
-        elif current_status == PostStatus.REJECTED.value:
+        if current_status == ApprovalStatus.PENDING.value:
+            return ApprovalStatus.PENDING.value
+        elif current_status == ApprovalStatus.REJECTED.value:
             return ApprovalStatus.RESENDING.value
         else:
             return current_status
 
     @staticmethod
-    def validate_product_ids(product_ids: List[int]) -> bool:
+    def validate_product_data(post_category: str, products: List[Dict]) -> bool:
         """
-        Validate product IDs from Storage table.
+        Validate product data based on post category.
 
         Args:
-            product_ids: List of product IDs from Storage table
+            post_category: Post category
+            products: List of product data
 
         Returns:
-            True if product IDs are valid, False otherwise
+            True if all products are valid, False otherwise
         """
-        if not product_ids:
+        if not products:
             return False
 
-        for product_id in product_ids:
-            if not isinstance(product_id, int) or product_id <= 0:
+        for product in products:
+            if not isinstance(product, dict):
+                return False
+
+            required_fields = ["product_name", "product_category_id", "product_quantity"]
+            if not all(field in product for field in required_fields):
+                return False
+
+            if post_category == PostCategory.SELLING.value:
+                if "product_price" not in product or product["product_price"] <= 0:
+                    return False
+
+            if product["product_quantity"] <= 0:
                 return False
 
         return True
@@ -138,7 +147,7 @@ class PostService:
         if images is None:
             return True
 
-        max_images = 10
+        max_images = 1
         if len(images) > max_images:
             return False
 
@@ -151,7 +160,7 @@ class PostService:
         return True
 
     @staticmethod
-    def handle_approval_action(current_status: str, action: str, reject_reason: Optional[str] = None) -> tuple:
+    def handle_approval_action(current_status: str, action: str, reject_reason: Optional[str] = None) -> tuple[Optional[str], bool, Optional[str]]:
         """
         Handle approval action and determine new status.
 
@@ -176,6 +185,8 @@ class PostService:
         elif action == "resend":
             return ApprovalStatus.RESENDING.value, True, None
 
+        return None, False, "Unhandled approval action"
+
     @staticmethod
     def can_mark_as_sold(current_status: str) -> bool:
         """
@@ -187,7 +198,7 @@ class PostService:
         Returns:
             True if post can be marked as sold, False otherwise
         """
-        return current_status == PostStatus.APPROVED.value
+        return current_status == ApprovalStatus.APPROVED.value
 
     @staticmethod
     def can_close_post(current_status: str) -> bool:
@@ -200,7 +211,7 @@ class PostService:
         Returns:
             True if post can be closed, False otherwise
         """
-        non_closeable_statuses = [PostStatus.SOLD.value, PostStatus.CLOSED.value]
+        non_closeable_statuses = [AvailabilityStatus.SOLD.value, AvailabilityStatus.CLOSED.value]
         return current_status not in non_closeable_statuses
 
     @staticmethod
@@ -222,7 +233,7 @@ class PostService:
             if role == "Admin":
                 filtered_posts.append(post)
             else:
-                if post.get("status") in [PostStatus.APPROVED.value]:
+                if post.get("status") in [ApprovalStatus.APPROVED.value]:
                     post_copy = post.copy()
                     if not include_approval_status:
                         post_copy.pop("reviewed_by", None)
@@ -300,10 +311,24 @@ class PostService:
         if post_category == PostCategory.DONATING.value and transaction_type != "donate":
             return False, "Only donation transactions allowed for Donating posts"
 
-        if post.get("status") != PostStatus.APPROVED.value:
+        if post.get("approval_status") != ApprovalStatus.APPROVED.value:
             return False, "Post is not approved for transactions"
 
         return True, None
+    
+    @staticmethod
+    def calculate_quantity_available(product_quantity: int, already_sold: int) -> int:
+        """
+        Calculate remaining quantity available for purchase.
+
+        Args:
+            product_quantity: Total quantity
+            already_sold: Already sold quantity
+
+        Returns:
+            Remaining available quantity
+        """
+        return max(0, product_quantity - already_sold)
 
     @staticmethod
     def get_storage_product_info(product: Dict) -> Dict:

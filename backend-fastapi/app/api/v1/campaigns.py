@@ -2,7 +2,7 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from typing import Optional, List
 from decimal import Decimal
-from schemas.campaign_schema import (
+from app.schemas.campaign_schema import (
     CampaignCreate, CampaignUpdate, CampaignRead, CampaignDetailRead,
     CampaignListRead, CampaignFilter, CampaignApprovalAction
 )

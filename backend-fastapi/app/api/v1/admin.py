@@ -2,8 +2,8 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from typing import Optional, List
 from decimal import Decimal
-from schemas.post_schema import PostApprovalAction
-from schemas.campaign_schema import CampaignApprovalAction
+from app.schemas.post_schema import PostApprovalAction
+from app.schemas.campaign_schema import CampaignApprovalAction
 
 router = APIRouter(prefix="/api/v1/admin", tags=["Admin"])
 

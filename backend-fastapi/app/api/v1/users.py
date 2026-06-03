@@ -1,7 +1,7 @@
 """User Management API Endpoints"""
 from fastapi import APIRouter, HTTPException, status, Depends
 from typing import Optional, List
-from schemas.user_schema import (
+from app.schemas.user_schema import (
     UserUpdate, UserChangePassword, UserRead, TokenResponse,
     DirectoryBase, OrganizationCreate, OrganizationRead, OrganizationMemberRead
 )
@@ -79,7 +79,8 @@ def change_password(data: UserChangePassword, current_user: str = Depends()):
     - **new_password**: New password
     - **confirm_password**: Confirm new password
     """
-    if data.new_password != data.confirm_password:
+    confirm_password = getattr(data, "confirm_password", None)
+    if confirm_password is not None and data.new_password != confirm_password:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Passwords don't match"

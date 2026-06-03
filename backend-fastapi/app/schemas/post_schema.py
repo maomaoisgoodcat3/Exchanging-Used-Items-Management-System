@@ -105,7 +105,8 @@ class PostUpdate(BaseModel):
 
 class PostFilter(BaseModel):
     post_category: Optional[str] = None
-    status: Optional[str] = None
+    availability: Optional[str] = None
+    approval: Optional[str] = None
     seller_email: Optional[EmailStr] = None
     campaign_id: Optional[int] = None
     search_query: Optional[str] = None
@@ -124,10 +125,13 @@ class PostRead(PostBase):
     post_id: int
     seller_email: EmailStr
     created_at: datetime
-    status: str
+    availability: str
+    approval: str
     reviewed_by: Optional[EmailStr] = None
     reviewed_at: Optional[datetime] = None
     reject_reason: Optional[str] = None
+    products: List[PostProductRead]
+    images: List[PostImageRead]
 
     class Config:
         from_attributes = True
@@ -142,7 +146,8 @@ class PostListRead(BaseModel):
     post_id: int
     title: str
     post_category: str
-    status: str
+    availability: str
+    approval: str
     seller_email: EmailStr
     created_at: datetime
     image_url: Optional[str] = None
