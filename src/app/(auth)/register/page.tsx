@@ -10,7 +10,7 @@ export default function LoginPage() {
           </h1>
 
           <h2 className="mt-2 text-xl font-semibold text-gray-800">
-            Nền tảng trao đổi đồ cũ Trường X
+            Nền tảng trao đổi đồ cũ UET
           </h2>
 
           <p className="mt-2 text-sm text-gray-500">
