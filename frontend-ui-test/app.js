@@ -2,6 +2,7 @@ const API_URL = 'http://127.0.0.1:8000/api/v1';
 let authMode = 'login'; 
 let currentViewingOrg = null;
 let amIManager = false;
+let currentUserRole = "Guest"; // Thêm biến lưu quyền Admin/Member
 
 document.addEventListener('DOMContentLoaded', () => {
     checkLoginAndServerStatus();
@@ -16,9 +17,11 @@ async function checkLoginAndServerStatus() {
     
     if (token && email) {
         try {
-            // Ping thử API User
             const res = await fetch(`${API_URL}/users/me`, { headers: { 'Authorization': `Bearer ${token}` } });
             if (!res.ok) throw new Error("Token lỗi");
+            
+            const userData = await res.json();
+            currentUserRole = String(userData.role).includes("Admin") ? "Admin" : "Member"; // Xác định quyền Admin
             
             document.getElementById('btnOpenAuth').classList.add('hidden');
             document.getElementById('btnProfile').innerText = `👤 ${email}`;
@@ -33,17 +36,17 @@ function switchMainTab(tabId) {
     document.getElementById(tabId).classList.remove('hidden');
     const targetBtn = document.querySelector(`.side-btn[onclick*="${tabId}"]`);
     if(targetBtn) targetBtn.classList.add('active');
+
+    // Tự động load dữ liệu khi vào Tab Campaign
+    if(tabId === 'tab-campaigns') {
+        document.getElementById('activeCampFilterText').classList.add('hidden');
+        loadCampaigns();
+    }
 }
 
 function openModal(id) { 
     document.getElementById(id).classList.add('active'); 
-    document.querySelectorAll('.msg').forEach(msg => { 
-        msg.style.display = 'none'; 
-        msg.className = 'msg'; 
-        msg.innerText = ''; 
-    });
-    
-    // Mặc định gọi form Login hoặc tab Info khi mở popup
+    document.querySelectorAll('.msg').forEach(msg => { msg.style.display = 'none'; msg.className = 'msg'; msg.innerText = ''; });
     if(id === 'authModal') switchAuthMode('login');
     if(id === 'profileModal') switchProfileTab('prof-info'); 
 }
@@ -61,41 +64,33 @@ function switchAuthMode(mode) {
     const hintForgot = document.getElementById('authForgotHint');
     const msgBox = document.getElementById('authMsg');
     
-    msgBox.style.display = 'none'; // Ẩn thông báo cũ
-    msgBox.innerText = '';
+    msgBox.style.display = 'none'; msgBox.innerText = '';
     
-    // Ẩn tất cả các input đi để Lọc lại
-    ['authName', 'authPhone', 'authPass', 'authVerifyPass'].forEach(id => {
+    ['authName', 'authPhone', 'authPass', 'authVerifyPass', 'authResetToken'].forEach(id => {
         document.getElementById(id).classList.add('hidden');
     });
+    document.getElementById('authPass').placeholder = "Mật khẩu...";
 
-    // Bật lại các input tùy theo Mode
     if (mode === 'login') {
-        title.innerText = "Đăng Nhập"; 
-        btn.innerText = "Đăng Nhập";
+        title.innerText = "Đăng Nhập"; btn.innerText = "Đăng Nhập";
         document.getElementById('authPass').classList.remove('hidden');
-        
-        hintToggle.innerText = "Tạo tài khoản mới"; 
-        hintToggle.onclick = (e) => { e.preventDefault(); switchAuthMode('register'); };
-        
-        hintForgot.style.display = 'block';
-        hintForgot.onclick = (e) => { e.preventDefault(); switchAuthMode('forgot'); };
-        
+        hintToggle.innerText = "Tạo tài khoản mới"; hintToggle.onclick = (e) => { e.preventDefault(); switchAuthMode('register'); };
+        hintForgot.style.display = 'block'; hintForgot.innerText = "Quên mật khẩu?"; hintForgot.onclick = (e) => { e.preventDefault(); switchAuthMode('forgot'); };
     } else if (mode === 'register') {
-        title.innerText = "Đăng Ký Tài Khoản"; 
-        btn.innerText = "Hoàn tất Đăng Ký";
+        title.innerText = "Đăng Ký Tài Khoản"; btn.innerText = "Hoàn tất Đăng Ký";
         ['authName', 'authPhone', 'authPass', 'authVerifyPass'].forEach(id => document.getElementById(id).classList.remove('hidden'));
-        
-        hintToggle.innerText = "Đã có tài khoản? Đăng nhập"; 
-        hintToggle.onclick = (e) => { e.preventDefault(); switchAuthMode('login'); };
+        hintToggle.innerText = "Đã có tài khoản? Đăng nhập"; hintToggle.onclick = (e) => { e.preventDefault(); switchAuthMode('login'); };
         hintForgot.style.display = 'none';
-        
-    } else {
-        title.innerText = "Khôi Phục Mật Khẩu"; 
-        btn.innerText = "Gửi Yêu Cầu";
-        
-        hintToggle.innerText = "Quay lại Đăng nhập"; 
-        hintToggle.onclick = (e) => { e.preventDefault(); switchAuthMode('login'); };
+    } else if (mode === 'forgot') {
+        title.innerText = "Khôi Phục Mật Khẩu"; btn.innerText = "Gửi Yêu Cầu";
+        hintToggle.innerText = "Quay lại Đăng nhập"; hintToggle.onclick = (e) => { e.preventDefault(); switchAuthMode('login'); };
+        hintForgot.style.display = 'block'; hintForgot.innerText = "Đã có mã Token? Đặt lại mật khẩu"; hintForgot.onclick = (e) => { e.preventDefault(); switchAuthMode('reset'); };
+    } else if (mode === 'reset') {
+        title.innerText = "Đặt Lại Mật Khẩu"; btn.innerText = "Xác Nhận Đổi Mật Khẩu";
+        document.getElementById('authResetToken').classList.remove('hidden');
+        document.getElementById('authPass').classList.remove('hidden'); document.getElementById('authPass').placeholder = "Mật khẩu mới...";
+        document.getElementById('authVerifyPass').classList.remove('hidden'); document.getElementById('authVerifyPass').placeholder = "Xác nhận mật khẩu mới...";
+        hintToggle.innerText = "Quay lại Đăng nhập"; hintToggle.onclick = (e) => { e.preventDefault(); switchAuthMode('login'); };
         hintForgot.style.display = 'none';
     }
 }
@@ -105,12 +100,7 @@ async function handleAuth() {
     const pass = document.getElementById('authPass').value;
     const msgBox = document.getElementById('authMsg');
     const btn = document.getElementById('btnSubmitAuth');
-
-    // Reset trạng thái nút bấm và thông báo
-    msgBox.style.display = 'none';
-    msgBox.className = 'msg';
-    btn.disabled = true;
-    btn.innerText = "Đang xử lý...";
+    msgBox.style.display = 'none'; msgBox.className = 'msg'; btn.disabled = true; btn.innerText = "Đang xử lý...";
 
     try {
         if (!email) throw new Error("Vui lòng nhập Email!");
@@ -118,87 +108,47 @@ async function handleAuth() {
         if (authMode === 'login') {
             if (!pass) throw new Error("Vui lòng nhập mật khẩu!");
             const formData = new URLSearchParams(); formData.append('username', email); formData.append('password', pass);
-            
             const res = await fetch(`${API_URL}/auth/login`, { method: 'POST', body: formData });
             const data = await res.json();
-            
             if (res.ok) {
-                sessionStorage.setItem('access_token', data.access_token); 
-                sessionStorage.setItem('user_email', email);
-                closeModal('authModal'); 
-                checkLoginAndServerStatus(); 
-                alert("Đăng nhập thành công!");
-            } else {
-                let errMsg = typeof data.detail === 'string' ? data.detail : "Sai thông tin đăng nhập";
-                throw new Error(errMsg);
-            }
+                sessionStorage.setItem('access_token', data.access_token); sessionStorage.setItem('user_email', email);
+                closeModal('authModal'); checkLoginAndServerStatus(); alert("Đăng nhập thành công!");
+            } else throw new Error(typeof data.detail === 'string' ? data.detail : "Sai thông tin đăng nhập");
         } 
         else if (authMode === 'register') {
-            const name = document.getElementById('authName').value;
-            const phone = document.getElementById('authPhone').value;
-            const verifyPass = document.getElementById('authVerifyPass').value;
-            
+            const name = document.getElementById('authName').value; const phone = document.getElementById('authPhone').value; const verifyPass = document.getElementById('authVerifyPass').value;
             if(!name || !phone || !pass || !verifyPass) throw new Error("Vui lòng điền đầy đủ thông tin!");
             if(pass !== verifyPass) throw new Error("Mật khẩu xác nhận không khớp!");
-
             const payload = { user_email: email, user_name: name, phone: phone, password: pass, verify_password: verifyPass };
             const res = await fetch(`${API_URL}/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-            const data = await res.json();
-            
-            if (res.ok) { 
-                alert("Đăng ký thành công! Vui lòng đăng nhập bằng tài khoản vừa tạo."); 
-                switchAuthMode('login'); // Tự quay về form đăng nhập
-            } else {
-                // XỬ LÝ LỖI 422 CỦA FASTAPI TẠI ĐÂY
-                let errMsg = "Lỗi đăng ký";
-                if (data.detail) {
-                    if (Array.isArray(data.detail)) {
-                        // Nếu là lỗi Validation của Pydantic
-                        errMsg = data.detail.map(err => {
-                            const field = err.loc[err.loc.length - 1]; // Lấy tên trường bị lỗi
-                            if (field === 'user_email') return "- Email không đúng định dạng (VD: a@b.com)";
-                            if (field === 'password' || field === 'verify_password') return "- Mật khẩu phải dài ít nhất 6 ký tự";
-                            return `- Dữ liệu không hợp lệ: ${field}`;
-                        }).join('\n');
-                    } else {
-                        // Lỗi Logic (Như email không có trong danh bạ trường)
-                        errMsg = data.detail;
-                    }
-                }
-                throw new Error(errMsg);
-            }
+            if (res.ok) { alert("Đăng ký thành công! Vui lòng đăng nhập."); switchAuthMode('login'); }
+            else throw new Error("Lỗi đăng ký");
         }
         else if (authMode === 'forgot') {
             const res = await fetch(`${API_URL}/auth/forgot-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_email: email }) });
-            if (res.ok) { 
-                msgBox.className = "msg success"; 
-                msgBox.innerText = "Đã gửi yêu cầu khôi phục. Vui lòng check Terminal Backend!"; 
-                msgBox.style.display = "block";
-            }
+            if (res.ok) { msgBox.className = "msg success"; msgBox.innerText = "Đã gửi yêu cầu! Copy mã (Token) trong Terminal và chọn 'Đã có mã Token?' để tiếp tục."; msgBox.style.display = "block"; }
             else throw new Error("Lỗi gửi yêu cầu khôi phục");
         }
-    } catch (err) { 
-        // Bắt mọi lỗi và HIỂN THỊ LÊN MÀN HÌNH
-        msgBox.className = "msg error"; 
-        msgBox.innerText = err.message || "Lỗi kết nối Server!"; 
-        msgBox.style.display = "block"; 
-    } finally {
-        // Phục hồi lại nút bấm
+        else if (authMode === 'reset') {
+            const token = document.getElementById('authResetToken').value; const verifyPass = document.getElementById('authVerifyPass').value;
+            if(!token || !pass || !verifyPass) throw new Error("Vui lòng điền đủ thông tin!");
+            if(pass !== verifyPass) throw new Error("Mật khẩu xác nhận không khớp!");
+            const res = await fetch(`${API_URL}/auth/reset-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reset_token: token, new_password: pass }) });
+            if (res.ok) { alert("Khôi phục mật khẩu thành công! Vui lòng đăng nhập bằng mật khẩu mới."); switchAuthMode('login'); }
+            else throw new Error("Lỗi khôi phục mật khẩu");
+        }
+    } catch (err) { msgBox.className = "msg error"; msgBox.innerText = err.message || "Lỗi kết nối Server!"; msgBox.style.display = "block"; } 
+    finally {
         btn.disabled = false;
-        if (authMode === 'login') btn.innerText = "Đăng Nhập";
-        else if (authMode === 'register') btn.innerText = "Hoàn tất Đăng Ký";
-        else btn.innerText = "Gửi Yêu Cầu";
+        if (authMode === 'login') btn.innerText = "Đăng Nhập"; else if (authMode === 'register') btn.innerText = "Hoàn tất Đăng Ký";
+        else if (authMode === 'forgot') btn.innerText = "Gửi Yêu Cầu"; else btn.innerText = "Xác Nhận Đổi Mật Khẩu";
     }
 }
 
 function handleLogout(showAlert = true) {
-    sessionStorage.removeItem('access_token'); 
-    sessionStorage.removeItem('user_email');
-    document.getElementById('btnOpenAuth').classList.remove('hidden');
-    document.getElementById('btnProfile').classList.add('hidden');
-    closeModal('profileModal'); 
-    switchMainTab('tab-posts');
-    if(showAlert) alert("Đã đăng xuất!");
+    sessionStorage.removeItem('access_token'); sessionStorage.removeItem('user_email'); currentUserRole = "Guest";
+    document.getElementById('btnOpenAuth').classList.remove('hidden'); document.getElementById('btnProfile').classList.add('hidden');
+    closeModal('profileModal'); switchMainTab('tab-posts'); if(showAlert) alert("Đã đăng xuất!");
 }
 
 // ==========================================
@@ -209,7 +159,6 @@ function switchProfileTab(tabId) {
     document.querySelectorAll('.prof-tab-btn').forEach(b => b.classList.remove('active'));
     document.getElementById(tabId).classList.add('active');
     document.querySelector(`.prof-tab-btn[onclick*="${tabId}"]`).classList.add('active');
-    
     if(tabId === 'prof-organizations') loadMyOrganizations();
     if(tabId === 'prof-info') fetchMyProfileInfo();
 }
@@ -225,89 +174,57 @@ async function fetchMyProfileInfo() {
 }
 
 async function updateProfile() {
-    const msgBox = document.getElementById('profMsg');
-    msgBox.style.display = 'none'; // Xóa lỗi cũ
+    const msgBox = document.getElementById('profMsg'); msgBox.style.display = 'none';
     const payload = { name: document.getElementById('profName').value, phone: document.getElementById('profPhone').value };
     try {
         const res = await fetch(`${API_URL}/users/me`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('access_token')}` }, body: JSON.stringify(payload) });
-        if (res.ok) { 
-            msgBox.className="msg success"; 
-            msgBox.innerText="Đã lưu thông tin mới!"; 
-            msgBox.style.display="block"; 
-        }
-        else throw new Error("Lỗi cập nhật");
-    } catch (err) { 
-        msgBox.className="msg error"; msgBox.innerText="Lỗi API!"; msgBox.style.display="block"; 
-    }
+        if (res.ok) { msgBox.className="msg success"; msgBox.innerText="Đã lưu thông tin mới!"; msgBox.style.display="block"; } else throw new Error("Lỗi cập nhật");
+    } catch (err) { msgBox.className="msg error"; msgBox.innerText="Lỗi API!"; msgBox.style.display="block"; }
 }
 
 async function changePassword() {
-    const msgBox = document.getElementById('pwdMsg');
-    msgBox.style.display = 'none'; // Xóa lỗi cũ
-    const payload = {
-        old_password: document.getElementById('oldPass').value,
-        new_password: document.getElementById('newPass').value,
-        verify_new_password: document.getElementById('verifyNewPass').value
-    };
+    const msgBox = document.getElementById('pwdMsg'); msgBox.style.display = 'none';
+    const payload = { old_password: document.getElementById('oldPass').value, new_password: document.getElementById('newPass').value, verify_new_password: document.getElementById('verifyNewPass').value };
     try {
         const res = await fetch(`${API_URL}/auth/change-password`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('access_token')}` }, body: JSON.stringify(payload) });
-        if (res.ok) { 
-            msgBox.className="msg success"; msgBox.innerText="Đổi mật khẩu thành công!"; msgBox.style.display="block"; 
-        } else {
-            const errData = await res.json();
-            throw new Error(errData.detail);
-        }
-    } catch (err) { 
-        msgBox.className="msg error"; msgBox.innerText=err.message; msgBox.style.display="block"; 
-    }
+        if (res.ok) { msgBox.className="msg success"; msgBox.innerText="Đổi mật khẩu thành công!"; msgBox.style.display="block"; }
+        else throw new Error((await res.json()).detail);
+    } catch (err) { msgBox.className="msg error"; msgBox.innerText=err.message; msgBox.style.display="block"; }
 }
 
 // ==========================================
 // 4. TỔ CHỨC (ORGANIZATIONS)
 // ==========================================
 async function loadMyOrganizations() {
-    document.getElementById('orgListView').classList.remove('hidden');
-    document.getElementById('orgDetailView').classList.add('hidden');
-    const list = document.getElementById('myOrgList');
-    list.innerHTML = '<p class="empty-text">Đang tải dữ liệu...</p>';
-    
+    document.getElementById('orgListView').classList.remove('hidden'); document.getElementById('orgDetailView').classList.add('hidden');
+    const list = document.getElementById('myOrgList'); list.innerHTML = '<p class="empty-text">Đang tải dữ liệu...</p>';
     try {
         const res = await fetch(`${API_URL}/users/my-organizations`, { headers: { 'Authorization': `Bearer ${sessionStorage.getItem('access_token')}` }});
         const orgs = await res.json();
         if(orgs.length === 0) return list.innerHTML = '<p class="empty-text">Bạn chưa tham gia Tổ chức nào.</p>';
-        
         list.innerHTML = orgs.map(o => `
             <div class="org-card" onclick="viewOrgDetail('${o.org_email}', '${o.my_permission}')">
                 <h4>${o.org_name}</h4>
                 <p>Vai trò của bạn: <span class="role-badge role-${o.my_permission}">${o.my_permission}</span></p>
-                <div class="org-stats">
-                    <span>👥 ${o.total_members} Member</span>
-                    <span>🚩 ${o.total_campaigns} Campaign</span>
-                </div>
-            </div>
-        `).join('');
+                <div class="org-stats"><span>👥 ${o.total_members} Member</span><span>🚩 ${o.total_campaigns} Campaign</span></div>
+            </div>`).join('');
     } catch(e) { list.innerHTML = '<p class="empty-text error">Lỗi API Tổ chức</p>'; }
 }
 
 async function viewOrgDetail(org_email, my_permission) {
-    currentViewingOrg = org_email;
-    amIManager = (my_permission === 'Manager');
-    
-    document.getElementById('orgListView').classList.add('hidden');
-    document.getElementById('orgDetailView').classList.remove('hidden');
-    
-    const tools = document.getElementById('managerTools');
-    amIManager ? tools.classList.remove('hidden') : tools.classList.add('hidden');
+    currentViewingOrg = org_email; amIManager = (my_permission === 'Manager');
+    document.getElementById('orgListView').classList.add('hidden'); document.getElementById('orgDetailView').classList.remove('hidden');
+    const tools = document.getElementById('managerTools'); amIManager ? tools.classList.remove('hidden') : tools.classList.add('hidden');
 
     try {
         const res = await fetch(`${API_URL}/users/organizations/${org_email}`, { headers: { 'Authorization': `Bearer ${sessionStorage.getItem('access_token')}` }});
         const data = await res.json();
-        
         document.getElementById('detailOrgName').innerText = data.org_info.org_name;
         document.getElementById('detailOrgDesc').innerText = data.org_info.description || "Tổ chức này chưa có mô tả.";
         
-        const memList = document.getElementById('orgMemberList');
-        memList.innerHTML = data.members.map(m => {
+        const editBtn = document.getElementById('btnEditDesc'); amIManager ? editBtn.classList.remove('hidden') : editBtn.classList.add('hidden');
+        
+        document.getElementById('orgMemberList').innerHTML = data.members.map(m => {
             let actionHtml = `<span class="role-badge role-${m.permission}">${m.permission}</span>`;
             if (amIManager && m.email !== sessionStorage.getItem('user_email')) {
                 actionHtml = `
@@ -315,25 +232,34 @@ async function viewOrgDetail(org_email, my_permission) {
                         <option value="Manager" ${m.permission === 'Manager'?'selected':''}>👑 Manager (Chuyển giao)</option>
                         <option value="Poster" ${m.permission === 'Poster'?'selected':''}>📝 Poster</option>
                         <option value="Member" ${m.permission === 'Member'?'selected':''}>👤 Member</option>
-                    </select>
-                `;
+                    </select>`;
             }
-            return `
-            <div class="member-item">
-                <div class="member-info">
-                    <span class="member-name">${m.name}</span>
-                    <span class="member-email">${m.email}</span>
-                </div>
-                <div>${actionHtml}</div>
-            </div>`;
+            return `<div class="member-item"><div class="member-info"><span class="member-name">${m.name}</span><span class="member-email">${m.email}</span></div><div>${actionHtml}</div></div>`;
         }).join('');
-
     } catch (e) { alert("Lỗi tải chi tiết!"); }
 }
 
-function backToOrgList() {
-    document.getElementById('orgListView').classList.remove('hidden');
-    document.getElementById('orgDetailView').classList.add('hidden');
+function backToOrgList() { document.getElementById('orgListView').classList.remove('hidden'); document.getElementById('orgDetailView').classList.add('hidden'); }
+
+function toggleEditDesc() {
+    const form = document.getElementById('editDescForm');
+    if (form.classList.contains('hidden')) {
+        form.classList.remove('hidden'); document.getElementById('btnEditDesc').classList.add('hidden');
+        const currentText = document.getElementById('detailOrgDesc').innerText;
+        document.getElementById('editDescInput').value = currentText === "Chưa có mô tả." ? "" : currentText;
+    } else { form.classList.add('hidden'); document.getElementById('btnEditDesc').classList.remove('hidden'); }
+}
+
+async function saveOrgDescription() {
+    const newDesc = document.getElementById('editDescInput').value;
+    try {
+        const res = await fetch(`${API_URL}/users/organizations/${currentViewingOrg}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('access_token')}` },
+            body: JSON.stringify({ description: newDesc })
+        });
+        if (res.ok) { alert("Cập nhật thành công!"); toggleEditDesc(); viewOrgDetail(currentViewingOrg, 'Manager'); }
+        else alert((await res.json()).detail);
+    } catch(e) { alert("Lỗi kết nối Server"); }
 }
 
 async function addOrgMember() {
@@ -349,73 +275,85 @@ async function addOrgMember() {
 }
 
 async function changeMemberRole(mem_email, new_role) {
-    if(new_role === 'Manager') {
-        if(!confirm(`CẢNH BÁO: Chuyển quyền Manager cho ${mem_email} đồng nghĩa bạn sẽ bị giáng cấp. Tiếp tục?`)) { 
-            viewOrgDetail(currentViewingOrg, 'Manager'); return; 
-        }
-    }
+    if(new_role === 'Manager' && !confirm(`CẢNH BÁO: Chuyển quyền Manager sẽ khiến bạn mất quyền. Tiếp tục?`)) { viewOrgDetail(currentViewingOrg, 'Manager'); return; }
     try {
         const res = await fetch(`${API_URL}/users/organizations/${currentViewingOrg}/members/${mem_email}/role`, {
             method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('access_token')}` },
             body: JSON.stringify({ permission: new_role })
         });
-        if (res.ok) { 
-            alert((await res.json()).message); 
-            if(new_role === 'Manager') backToOrgList(); else viewOrgDetail(currentViewingOrg, 'Manager');
-        } else alert((await res.json()).detail);
+        if (res.ok) { alert((await res.json()).message); new_role === 'Manager' ? backToOrgList() : viewOrgDetail(currentViewingOrg, 'Manager'); } 
+        else alert((await res.json()).detail);
     } catch (e) { alert("Lỗi Server"); }
 }
 
 function viewOrgCampaigns() {
-    closeModal('profileModal');
-    switchMainTab('tab-campaigns');
-    alert("Chuyển sang Tab Campaign và hiển thị các chiến dịch của Tổ chức: " + currentViewingOrg);
+    closeModal('profileModal'); switchMainTab('tab-campaigns');
+    setTimeout(() => { loadCampaigns(currentViewingOrg); }, 100);
 }
 
-
 // ==========================================
-// 5. QUẢN LÝ CHIẾN DỊCH (CAMPAIGNS)
+// 5. QUẢN LÝ CHIẾN DỊCH (TỰ ĐỘNG UPLOAD & DUYỆT BÀI)
 // ==========================================
 
-// Gắn sự kiện để load dữ liệu khi người dùng chuyển qua Tab Campaign
-const oldSwitchMainTab = switchMainTab;
-switchMainTab = function(tabId) {
-    oldSwitchMainTab(tabId);
-    if(tabId === 'tab-campaigns') {
-        document.getElementById('activeCampFilterText').classList.add('hidden'); // Reset bộ lọc
-        loadCampaigns();
-    }
-};
+// Sự kiện xem trước ảnh Upload
+document.getElementById('campImageFile')?.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if(file) {
+        document.getElementById('imgPreview').classList.remove('hidden');
+        document.getElementById('previewImgTag').src = URL.createObjectURL(file);
+    } else document.getElementById('imgPreview').classList.add('hidden');
+});
+
+// Hàm Upload tự động lên ImgBB (Cloud Free)
+async function uploadImageToImgBB(file) {
+    const formData = new FormData(); formData.append('image', file);
+    const IMGBB_API_KEY = "63a6a1d82136e0952086fc505c2196fb"; // API Test
+    const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, { method: 'POST', body: formData });
+    const data = await res.json();
+    if(data.success) return data.data.url;
+    throw new Error("Lỗi upload ảnh lên Cloud");
+}
 
 async function loadCampaigns(orgEmailFilter = null) {
     const list = document.getElementById('globalCampaignsList');
     list.innerHTML = '<p class="empty-text">Đang tải...</p>';
-    
-    // Kiểm tra và cấp quyền hiện nút "Tạo Chiến Dịch"
     checkCampaignCreatePermission();
 
     try {
         let url = `${API_URL}/campaigns/`;
         if (orgEmailFilter) url += `?org_email=${orgEmailFilter}`;
-        
-        const res = await fetch(url);
+
+        const headers = {};
+        const token = sessionStorage.getItem('access_token');
+        if(token) headers['Authorization'] = `Bearer ${token}`; // Nhúng Token để Backend nhận biết Admin
+
+        const res = await fetch(url, { headers });
         const data = await res.json();
         
-        if(data.length === 0) {
-            list.innerHTML = '<p class="empty-text" style="grid-column: 1 / -1; text-align:center;">Chưa có chiến dịch nào.</p>';
-            return;
-        }
+        if(data.length === 0) return list.innerHTML = '<p class="empty-text" style="grid-column: 1 / -1; text-align:center;">Chưa có chiến dịch nào.</p>';
 
-        // Dùng CSS Grid Card giống Orgs để hiển thị cho đẹp
         list.innerHTML = data.map(c => {
             const statusColor = c.approval === 'Approved' ? '#198754' : (c.approval === 'Pending' ? '#ffc107' : '#dc3545');
             const statusText = c.approval === 'Pending' ? 'black' : 'white';
             
+            // Logic hiển thị Nút Admin Duyệt/Từ chối bài Pending
+            let adminActions = '';
+            if (currentUserRole === 'Admin' && c.approval === 'Pending') {
+                adminActions = `
+                    <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #ccc; display:flex; gap:10px;">
+                        <button class="btn btn-primary" style="flex:1; padding: 5px; font-size:12px;" onclick="reviewCampaign(${c.campaign_id}, 'approve', event)">✅ Duyệt</button>
+                        <button class="btn btn-danger" style="flex:1; padding: 5px; font-size:12px;" onclick="reviewCampaign(${c.campaign_id}, 'reject', event)">❌ Từ chối</button>
+                    </div>
+                `;
+            }
+
             return `
-            <div class="org-card" style="padding: 0; overflow: hidden; display: flex; flex-direction: column;">
+            <div style="background:white; border-radius:8px; border:1px solid #ddd; overflow: hidden; display: flex; flex-direction: column; cursor:pointer;" 
+                 onclick="viewCampaignPosts(${c.campaign_id}, '${c.title}')">
+                
                 ${c.thumbnail_url 
-                    ? `<img src="${c.thumbnail_url}" style="width:100%; height:180px; object-fit:cover; border-bottom: 1px solid #eee;">` 
-                    : `<div style="width:100%; height:180px; background:#f8f9fa; display:flex; align-items:center; justify-content:center; color:#ccc; border-bottom: 1px solid #eee;">Chưa có ảnh (IPFS)</div>`}
+                    ? `<img src="${c.thumbnail_url}" style="width:100%; height:160px; object-fit:cover; border-bottom: 1px solid #eee;">` 
+                    : `<div style="width:100%; height:160px; background:#f8f9fa; display:flex; align-items:center; justify-content:center; color:#ccc; border-bottom: 1px solid #eee;">Chưa có ảnh</div>`}
                 
                 <div style="padding: 15px; flex: 1; display: flex; flex-direction: column;">
                     <div style="margin-bottom: 10px;">
@@ -429,37 +367,60 @@ async function loadCampaigns(orgEmailFilter = null) {
                         <b>Bắt đầu:</b> ${new Date(c.start_date).toLocaleDateString('vi-VN')} <br>
                         <b>Kết thúc:</b> ${new Date(c.end_date).toLocaleDateString('vi-VN')}
                     </div>
+                    ${adminActions}
                 </div>
-            </div>
-            `;
+            </div>`;
         }).join('');
-    } catch (e) {
-        list.innerHTML = '<p class="empty-text error">Lỗi tải dữ liệu chiến dịch</p>';
+    } catch (e) { list.innerHTML = '<p class="empty-text error">Lỗi tải dữ liệu chiến dịch</p>'; }
+}
+
+// Chuyển hướng sang Post & Filter
+function viewCampaignPosts(campaignId, title) {
+    switchMainTab('tab-posts');
+    const filterText = document.getElementById('activeFilterText');
+    if(filterText) {
+        filterText.innerText = `(Chiến dịch: ${title})`;
+        filterText.classList.remove('hidden');
     }
 }
 
-// Hàm soi quyền User xem có được quyền tạo Campaign không
+// Admin thao tác Duyệt/Từ chối
+async function reviewCampaign(id, action, event) {
+    event.stopPropagation(); // Ngăn click lan ra thẻ xem chi tiết Post
+    let reason = null;
+    if (action === 'reject') {
+        reason = prompt("Nhập lý do từ chối chiến dịch này:");
+        if (reason === null) return;
+    }
+    try {
+        const res = await fetch(`${API_URL}/campaigns/${id}/approve`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('access_token')}` },
+            body: JSON.stringify({ action: action, reject_reason: reason })
+        });
+        if (res.ok) { alert("Thao tác thành công!"); loadCampaigns(); } else alert("Lỗi hệ thống!");
+    } catch(e) { alert("Lỗi Server!"); }
+}
+
 async function checkCampaignCreatePermission() {
     const btn = document.getElementById('btnOpenCreateCampaign');
     const select = document.getElementById('campOrgEmail');
+    if(!btn) return;
     
     btn.classList.add('hidden');
     select.innerHTML = '<option value="">-- Chọn Tổ chức của bạn --</option>';
 
-    if(!sessionStorage.getItem('access_token')) return;
+    const token = sessionStorage.getItem('access_token');
+    if(!token || currentUserRole === 'Admin') return; // Admin không cần nút tạo chiến dịch
 
     try {
-        const res = await fetch(`${API_URL}/users/my-organizations`, { headers: { 'Authorization': `Bearer ${sessionStorage.getItem('access_token')}` }});
+        const res = await fetch(`${API_URL}/users/my-organizations`, { headers: { 'Authorization': `Bearer ${token}` }});
         if(res.ok) {
             const orgs = await res.json();
-            // Lọc các org mà user đang là Manager hoặc Poster
             const validOrgs = orgs.filter(o => o.my_permission === 'Manager' || o.my_permission === 'Poster');
-            
             if(validOrgs.length > 0) {
-                btn.classList.remove('hidden'); // Kích hoạt nút
-                validOrgs.forEach(o => {
-                    select.insertAdjacentHTML('beforeend', `<option value="${o.org_email}">${o.org_name} (${o.my_permission})</option>`);
-                });
+                btn.classList.remove('hidden');
+                validOrgs.forEach(o => select.insertAdjacentHTML('beforeend', `<option value="${o.org_email}">${o.org_name}</option>`));
             }
         }
     } catch(e) {}
@@ -468,72 +429,48 @@ async function checkCampaignCreatePermission() {
 async function handleCreateCampaign() {
     const msgBox = document.getElementById('campMsg');
     const btn = document.getElementById('btnSubmitCamp');
-    msgBox.style.display = 'none';
-    btn.disabled = true;
+    msgBox.style.display = 'none'; btn.disabled = true;
 
     const orgEmail = document.getElementById('campOrgEmail').value;
     const title = document.getElementById('campTitle').value;
     const desc = document.getElementById('campDesc').value;
     const start = document.getElementById('campStart').value;
     const end = document.getElementById('campEnd').value;
-    const image = document.getElementById('campImage').value;
+    const fileInput = document.getElementById('campImageFile');
 
     try {
-        if(!orgEmail || !title || !desc || !start || !end) {
-            throw new Error("Vui lòng nhập đầy đủ các trường bắt buộc có dấu (*)");
+        if(!orgEmail || !title || !desc || !start || !end) throw new Error("Vui lòng điền đủ thông tin bắt buộc!");
+        
+        let imageUrl = "";
+        // Nếu có ảnh, gọi ImgBB upload
+        if(fileInput.files.length > 0) {
+            btn.innerText = "Đang Upload ảnh lên Cloud...";
+            imageUrl = await uploadImageToImgBB(fileInput.files[0]);
         }
 
+        btn.innerText = "Đang gửi yêu cầu tạo Chiến dịch...";
         const payload = {
-            org_email: orgEmail,
-            title: title,
-            description: desc,
-            start_date: new Date(start).toISOString(),
-            end_date: new Date(end).toISOString(),
-            images: image ? [image] : []
+            org_email: orgEmail, title: title, description: desc,
+            start_date: new Date(start).toISOString(), end_date: new Date(end).toISOString(),
+            images: imageUrl ? [imageUrl] : []
         };
 
         const res = await fetch(`${API_URL}/campaigns/`, {
             method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${sessionStorage.getItem('access_token')}` 
-            },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('access_token')}` },
             body: JSON.stringify(payload)
         });
         
-        const data = await res.json();
         if(res.ok) {
-            alert(data.message);
+            alert("Tạo Chiến dịch thành công! Vui lòng chờ Admin duyệt.");
             closeModal('campaignModal');
-            
-            // Xóa form
-            document.getElementById('campTitle').value = '';
-            document.getElementById('campDesc').value = '';
-            document.getElementById('campImage').value = '';
-            
-            loadCampaigns(); // Tải lại danh sách
-        } else {
-            throw new Error(data.detail || "Lỗi tạo chiến dịch");
-        }
+            document.getElementById('campTitle').value = ''; document.getElementById('campDesc').value = '';
+            document.getElementById('imgPreview').classList.add('hidden'); fileInput.value = '';
+            loadCampaigns();
+        } else throw new Error((await res.json()).detail || "Lỗi tạo chiến dịch");
     } catch (e) {
-        msgBox.className = "msg error";
-        msgBox.innerText = e.message || "Lỗi kết nối server!";
-        msgBox.style.display = "block";
+        msgBox.className = "msg error"; msgBox.innerText = e.message; msgBox.style.display = "block";
     } finally {
-        btn.disabled = false;
+        btn.disabled = false; btn.innerText = "Gửi Yêu Cầu Duyệt";
     }
-}
-
-// Hàm liên kết từ bên Tab Account -> Tab Campaign
-function viewOrgCampaigns() {
-    closeModal('profileModal');
-    switchMainTab('tab-campaigns'); // Gọi hàm đổi tab, hàm này sẽ tự động loadCampaigns()
-    
-    setTimeout(() => {
-        // Sau đó gọi lại với filter org_email
-        loadCampaigns(currentViewingOrg); 
-        const filterText = document.getElementById('activeCampFilterText');
-        filterText.innerText = `(Lọc theo Tổ chức)`;
-        filterText.classList.remove('hidden');
-    }, 100);
 }

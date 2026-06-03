@@ -38,19 +38,22 @@
             </div>
             <div id="tab-myposts" class="main-tab-content hidden"><h2>Bài của tôi (WIP)</h2></div>
             <div id="tab-storage" class="main-tab-content hidden"><h2>Kho đồ (WIP)</h2></div>
+            
             <div id="tab-campaigns" class="main-tab-content hidden">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                     <h2 style="margin: 0;">🚩 Chiến dịch từ Tổ chức <span id="activeCampFilterText" class="filter-badge hidden"></span></h2>
                     <button id="btnOpenCreateCampaign" class="btn btn-warning hidden" onclick="openModal('campaignModal')">+ Tạo Chiến dịch mới</button>
                 </div>
-                <div class="org-grid" id="globalCampaignsList">
+                <div class="grid-list" id="globalCampaignsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px;">
                     <p class="empty-text">Đang tải dữ liệu chiến dịch...</p>
                 </div>
             </div>
+            
             <div id="tab-orders" class="main-tab-content hidden"><h2>Đơn hàng của tôi (WIP)</h2></div>
             <div id="tab-notifications" class="main-tab-content hidden"><h2>Thông báo (WIP)</h2></div>
         </main>
     </div>
+
     <div id="campaignModal" class="modal-overlay">
         <div class="modal-content" style="width: 550px;">
             <span class="close-btn" onclick="closeModal('campaignModal')">&times;</span>
@@ -59,29 +62,32 @@
             </div>
             <div class="modal-body">
                 <label style="font-size: 13px; font-weight: bold; color: gray;">Đại diện cho Tổ chức <span style="color:red">*</span></label>
-                <select id="campOrgEmail" class="mb-10">
+                <select id="campOrgEmail" class="mb-10" style="padding:8px; border-radius:6px; border:1px solid #ccc; width:100%;">
                     <option value="">-- Chọn Tổ chức của bạn --</option>
                 </select>
 
                 <label style="font-size: 13px; font-weight: bold; color: gray;">Tên Chiến Dịch <span style="color:red">*</span></label>
-                <input type="text" id="campTitle" class="mb-10" placeholder="VD: Quyên góp áo ấm vùng cao...">
+                <input type="text" id="campTitle" class="mb-10" placeholder="VD: Quyên góp áo ấm..." style="padding:8px; border-radius:6px; border:1px solid #ccc; width:100%;">
                 
                 <label style="font-size: 13px; font-weight: bold; color: gray;">Mô tả chi tiết <span style="color:red">*</span></label>
-                <textarea id="campDesc" class="mb-10" rows="3" placeholder="Chiến dịch này nhằm mục đích gì..."></textarea>
+                <textarea id="campDesc" class="mb-10" rows="3" placeholder="Mục đích..." style="padding:8px; border-radius:6px; border:1px solid #ccc; width:100%;"></textarea>
                 
                 <div style="display: flex; gap: 10px; margin-bottom: 10px;">
                     <div style="flex: 1;">
                         <label style="font-size: 13px; font-weight: bold; color: gray;">Ngày bắt đầu <span style="color:red">*</span></label>
-                        <input type="datetime-local" id="campStart">
+                        <input type="datetime-local" id="campStart" style="padding:8px; border-radius:6px; border:1px solid #ccc; width:100%;">
                     </div>
                     <div style="flex: 1;">
                         <label style="font-size: 13px; font-weight: bold; color: gray;">Ngày kết thúc <span style="color:red">*</span></label>
-                        <input type="datetime-local" id="campEnd">
+                        <input type="datetime-local" id="campEnd" style="padding:8px; border-radius:6px; border:1px solid #ccc; width:100%;">
                     </div>
                 </div>
 
-                <label style="font-size: 13px; font-weight: bold; color: gray;">Link Ảnh IPFS (Pinata) - Tùy chọn</label>
-                <input type="text" id="campImage" placeholder="https://gateway.pinata.cloud/ipfs/...">
+                <label style="font-size: 13px; font-weight: bold; color: gray;">Hình ảnh minh họa (Chọn từ máy)</label>
+                <input type="file" id="campImageFile" accept="image/*" class="mb-10" style="border: none; padding: 0; width:100%;">
+                <div id="imgPreview" class="hidden mb-10" style="text-align: center; background: #f8f9fa; padding: 10px; border-radius: 6px;">
+                    <img id="previewImgTag" src="" style="max-width: 100%; max-height: 150px; border-radius: 4px;">
+                </div>
                 
                 <div id="campMsg" class="msg"></div>
             </div>
@@ -90,6 +96,7 @@
             </div>
         </div>
     </div>
+
     <div id="profileModal" class="modal-overlay">
         <div class="modal-content profile-layout">
             <span class="close-btn" onclick="closeModal('profileModal')">&times;</span>
@@ -106,7 +113,7 @@
                 <div id="prof-info" class="prof-content active">
                     <h2 style="margin-top:0;">Hồ sơ cá nhân</h2>
                     <div style="max-width: 400px;">
-                        <label style="font-size: 13px; font-weight: bold; color: gray;">Email (Không thể đổi)</label>
+                        <label style="font-size: 13px; font-weight: bold; color: gray;">Email</label>
                         <input type="email" id="profEmail" class="mb-10" disabled style="background: #f0f0f0;">
                         <label style="font-size: 13px; font-weight: bold; color: gray;">Họ và tên</label>
                         <input type="text" id="profName" class="mb-10" placeholder="Nhập họ tên...">
@@ -141,8 +148,19 @@
                         </div>
                         
                         <h2 id="detailOrgName" style="margin-top: 0; color: #0d6efd;">Tên Tổ chức</h2>
-                        <p id="detailOrgDesc" style="color: #666; font-size: 14px; margin-bottom: 20px; line-height: 1.5;"></p>
+                        
+                        <div id="descContainer" class="mb-10">
+                            <p id="detailOrgDesc" style="color: #666; font-size: 14px; margin-bottom: 5px; line-height: 1.5;"></p>
+                            <button id="btnEditDesc" class="btn btn-outline hidden" style="font-size: 12px; padding: 4px 8px;" onclick="toggleEditDesc()">✏️ Chỉnh sửa mô tả</button>
+                        </div>
 
+                        <div id="editDescForm" class="hidden mb-10 p-10 bg-light rounded" style="border: 1px solid #ccc;">
+                            <textarea id="editDescInput" rows="3" placeholder="Nhập mô tả cho Tổ chức của bạn..."></textarea>
+                            <div style="margin-top: 5px; display: flex; gap: 5px;">
+                                <button class="btn btn-primary" onclick="saveOrgDescription()">Lưu thay đổi</button>
+                                <button class="btn btn-outline" onclick="toggleEditDesc()">Hủy</button>
+                            </div>
+                        </div>
                         <div id="managerTools" class="hidden mb-10 p-10 bg-light rounded" style="border-left: 4px solid #ffc107;">
                             <h4 style="margin: 0 0 10px 0;">Thêm thành viên (Quyền Manager)</h4>
                             <div style="display: flex; gap: 10px;">
@@ -169,6 +187,8 @@
                 <input type="email" id="authEmail" placeholder="Email (Bắt buộc)">
                 <input type="text" id="authName" class="hidden" placeholder="Họ và tên">
                 <input type="text" id="authPhone" class="hidden" placeholder="Số điện thoại">
+                <input type="text" id="authResetToken" class="hidden" placeholder="Dán mã khôi phục (Token) vào đây...">
+                
                 <input type="password" id="authPass" placeholder="Mật khẩu...">
                 <input type="password" id="authVerifyPass" class="hidden" placeholder="Xác nhận mật khẩu...">
                 <div id="authMsg" class="msg"></div>

@@ -189,3 +189,35 @@ def update_member_role(
     target_member.mem_permission = data.permission
     db.commit()
     return {"message": f"Đã cập nhật quyền của {mem_email} thành {data.permission}."}
+
+
+# ==========================================
+# 4. CHỈNH SỬA THÔNG TIN TỔ CHỨC
+# ==========================================
+class OrgUpdateDescription(BaseModel):
+    description: str
+
+@router.put("/organizations/{org_email}")
+def update_organization_info(
+    org_email: str,
+    data: OrgUpdateDescription,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Người đại diện (Manager) chỉnh sửa Description của Tổ chức"""
+    # 1. Kiểm tra quyền Manager
+    manager_check = db.query(OrganizationMember).filter(
+        OrganizationMember.org_email == org_email,
+        OrganizationMember.mem_email == current_user.email,
+        OrganizationMember.mem_permission == "Manager"
+    ).first()
+    
+    if not manager_check:
+        raise HTTPException(status_code=403, detail="Chỉ Manager mới có quyền chỉnh sửa thông tin Tổ chức!")
+
+    # 2. Cập nhật DB
+    org = db.query(Organization).filter(Organization.org_email == org_email).first()
+    org.description = data.description
+    db.commit()
+    
+    return {"message": "Cập nhật mô tả Tổ chức thành công!"}
