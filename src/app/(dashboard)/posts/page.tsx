@@ -80,7 +80,8 @@ export default function PostsPage() {
 
           <CreatePostModal 
               isOpen={isCreating} 
-                onClose={() => setIsCreating(false)} 
+                onClose={() => setIsCreating(false)}
+                onPostCreated={(post) => setPosts((currentPosts) => [post, ...currentPosts])}
             />
         </div>
       </div>

@@ -1,9 +1,9 @@
 import RoleDashboardLayout from "@/components/layout/RoleDashboardLayout";
 
-export default function DashboardLayout({
+export default function UserLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <RoleDashboardLayout>{children}</RoleDashboardLayout>;
+  return <RoleDashboardLayout scope="user">{children}</RoleDashboardLayout>;
 }
