@@ -21,6 +21,10 @@ const isUserRole = (value: unknown): value is UserRole =>
   value === "ADMIN" || value === "STUDENT" || value === "CLUB";
 
 const getStoredMockRole = (): UserRole => {
+  if (typeof window === "undefined") {
+    return DEFAULT_MOCK_ROLE;
+  }
+
   const storedRole = window.localStorage.getItem(MOCK_ROLE_STORAGE_KEY);
   return isUserRole(storedRole) ? storedRole : DEFAULT_MOCK_ROLE;
 };
@@ -36,8 +40,10 @@ export const useAuthStore = create<AuthState>((set) => ({
   setMockRole: (role) => {
     const user = getMockUserByRole(role);
 
-    window.localStorage.setItem(MOCK_ROLE_STORAGE_KEY, role);
-    window.localStorage.setItem("token", getMockToken(role));
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(MOCK_ROLE_STORAGE_KEY, role);
+      window.localStorage.setItem("token", getMockToken(role));
+    }
 
     set({
       user,
@@ -55,7 +61,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     });
   },
   logout: () => {
-    window.localStorage.removeItem("token");
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("token");
+    }
 
     set({
       user: null,

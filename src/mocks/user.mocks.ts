@@ -35,4 +35,5 @@ export const MOCK_USERS: Record<UserRole, User> = {
   },
 };
 
-export const getMockUserByRole = (role: UserRole): User => MOCK_USERS[role];
+export const getMockUserByRole = (role: UserRole) => MOCK_USERS[role];
+
