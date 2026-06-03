@@ -5,6 +5,10 @@ from sqlalchemy.orm import relationship
 import enum
 from app.core.database import Base
 
+# ==========================================
+# ENUMS
+# ==========================================
+
 class TransactionStatusEnum(str, enum.Enum):
     Pending = "Pending"
     Deposited = "Deposited"
@@ -17,21 +21,26 @@ class OrderStatusEnum(str, enum.Enum):
     Cancelled = "Cancelled"
     Successful = "Successful"
 
+# ==========================================
+# MODELS
+# ==========================================
+
 class Transactions(Base):
     __tablename__ = "transactions"
     transaction_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    post_id = Column(Integer, ForeignKey("posts.post_id"), nullable=False)
+    post_id = Column(Integer, ForeignKey("Posts.post_id"), nullable=False)
     product_id = Column(Integer, ForeignKey('Storage.product_id'), nullable=False)
-    buyer_email = Column(String(100), ForeignKey("users.email"), nullable=False)
+    buyer_email = Column(String(100), ForeignKey("Users.email"), nullable=False)
     quantity = Column(Integer, default=1)
     service_fee = Column(Numeric(15, 2), default=0.00)
     order_status = Column(Enum(OrderStatusEnum), default=OrderStatusEnum.Pending)
     transaction_status = Column(Enum(TransactionStatusEnum), default=TransactionStatusEnum.Pending)
     transaction_date = Column(DateTime, server_default=func.now())
 
-    buyer = relationship("Users", back_populates="transactions")
-    product = relationship("Storage", back_populates="transactions")
-
+    r_transactions_users = relationship("Users", back_populates="r_users_transactions")
+    r_transactions_storage = relationship("Storage", back_populates="r_storage_transactions")
+    r_transactions_posts = relationship("Posts", back_populates="r_posts_transactions")
+    
 
 class Settings(Base):
     __tablename__ = "settings"
@@ -42,4 +51,4 @@ class Settings(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     updated_by = Column(String(100), ForeignKey("users.user_email"))
 
-    updater = relationship("Users", back_populates="updated_settings")
+    r_settings_users = relationship("Users", back_populates="r_users_settings")

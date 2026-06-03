@@ -5,7 +5,11 @@ from sqlalchemy.sql import func
 import enum
 from app.core.database import Base
 
-class PostTypeEnum(str, enum.Enum):
+# ==========================================
+# ENUMS
+# ==========================================
+
+class PostCategoryEnum(str, enum.Enum):
     Selling = "Selling"
     Trading = "Trading"
     Donating = "Donating"
@@ -18,41 +22,47 @@ class PostApprovalStatus(str, enum.Enum):
 
 class PostAvailabilityStatus(str, enum.Enum):
     Open = "Open"
+    Sold = "Sold"
     Closed = "Closed"
+
+# ==========================================
+# MODELS
+# ==========================================
 
 class ProductCategories(Base):
     __tablename__ = "productcategories"
     category_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     category_name = Column(String(100), nullable=False)
 
-    products = relationship("Storage", back_populates="category")
+    r_productcategories_storage = relationship("Storage", back_populates="r_storage_productcategores")
 
 class Posts(Base):
     __tablename__ = "posts"
     post_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    seller_email = Column(String(100), ForeignKey("account_user.user_email"), nullable=False)
+    seller_email = Column(String(100), ForeignKey("Users.email"), nullable=False)
+    post_category = Column(Enum(PostCategoryEnum), nullable=False)
     campaign_id = Column(Integer, ForeignKey("campaigns.campaign_id"), nullable=True)
     title = Column(String(200), nullable=False)
     description = Column(Text)
-    image_post_url = Column(String(500))
-    post_type = Column(Enum(PostTypeEnum), nullable=False)
+    thumbnail_url = Column(String(500))
+    created_at = Column(DateTime, server_default=func.now())
     approval = Column(Enum(PostApprovalStatus), default=PostApprovalStatus.Pending)
     availability = Column(Enum(PostAvailabilityStatus), default=PostAvailabilityStatus.Open)
-    reviewed_by = Column(String(100), ForeignKey("account_user.user_email"))
+    reviewed_by = Column(String(100), ForeignKey("Users.email"))
     reviewed_at = Column(DateTime)
-    rejection_reason = Column(Text)
-    created_at = Column(DateTime, server_default=func.now())
+    reject_reason = Column(Text)
 
-    campaign = relationship("Campaigns", back_populates="posts")
-    products = relationship("PostProducts", back_populates="post", cascade="all, delete-orphan")
-    images = relationship("PostImages", back_populates="post", cascade="all, delete-orphan")
+    r_posts_campaigns = relationship("Campaigns", back_populates="r_campaigns_posts")
+    r_posts_postproducts = relationship("PostProducts", back_populates="r_postproducts_posts", cascade="all, delete-orphan")
+    r_posts_postimages = relationship("PostImages", back_populates="r_postimages_posts", cascade="all, delete-orphan")
 
 class PostProducts(Base):
     post_id = Column(Integer, ForeignKey('Posts.post_id'), primary_key=True)
     product_id = Column(Integer, ForeignKey('Storage.product_id'), primary_key=True)
+    product_quantity = Column(Integer, nullable=False)
 
-    post = relationship("Posts", back_populates="products")
-    product = relationship("Storage", back_populates="posts_associated")
+    r_postproducts_posts = relationship("Posts", back_populates="r_posts_postproducts")
+    r_postproducts_storage = relationship("Storage", back_populates="r_storage_postproducts")
 
 class Storage(Base):
     __tablename__ = 'storage'
@@ -65,13 +75,12 @@ class Storage(Base):
     product_price = Column(Numeric(15, 2), default=0.00)
     product_location_id = Column(Integer, ForeignKey('Locations.location_id'), nullable=False)
 
-    # Relationships
-    user = relationship("Users", back_populates="products_in_storage")
-    category = relationship("ProductCategories", back_populates="products")
-    location_rel = relationship("Locations", back_populates="products")
-    images = relationship("ProductImages", back_populates="product")
-    posts_associated = relationship("PostProducts", back_populates="product")
-    transactions = relationship("Transactions", back_populates="product")
+    r_storage_users = relationship("Users", back_populates="r_users_storage")
+    r_storage_productcategories = relationship("ProductCategories", back_populates="r_productcategories_storage")
+    r_storage_locations = relationship("Locations", back_populates="r_locations_storage")
+    r_storage_productimages = relationship("ProductImages", back_populates="r_productimages_storage")
+    r_storage_postproducts = relationship("PostProducts", back_populates="r_postproducts_storage")
+    r_storage_transactions = relationship("Transactions", back_populates="r_transactions_storage")
 
 class ProductImages(Base):
     __tablename__ = 'productimages'
@@ -79,6 +88,6 @@ class ProductImages(Base):
     image_id = Column(Integer, primary_key=True, autoincrement=True)
     product_id = Column(Integer, ForeignKey('Storage.product_id'), nullable=False)
     image_url = Column(String(500))
-    uploaded_at = Column(DateTime, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
+    uploaded_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
-    product = relationship("Storage", back_populates="images")
+    r_productimages_storage = relationship("Storage", back_populates="r_storage_productimages")

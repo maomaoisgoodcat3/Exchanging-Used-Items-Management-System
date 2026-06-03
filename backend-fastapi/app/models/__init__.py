@@ -10,7 +10,7 @@ from .users import (
     Locations,
     MemberTypeEnum,
     RoleEnum,
-    OrganMemberEnum,
+    OrgMemberEnum,
 )
 from .posts import (
     Posts,
@@ -18,15 +18,15 @@ from .posts import (
     Storage,
     ProductCategories,
     ProductImages,
-    PostTypeEnum,
+    PostCategoryEnum,
     PostApprovalStatus,
     PostAvailabilityStatus,
 )
 from .campaigns import (
-    Campaign,
+    Campaigns,
     CampaignImages,
-    CampaignApprovalStatus,
-    CampaignAvailabilityStatus,
+    CampaignApprovalEnum,
+    CampaignAvailabilityEnum,
 )
 from .transactions import (
     Transactions,
@@ -44,7 +44,7 @@ __all__ = [
     "Locations",
     "MemberTypeEnum",
     "RoleEnum",
-    "OrganMemberEnum",
+    "OrgMemberEnum",
     # Post models and enums
     "Posts",
     "PostProducts",
@@ -57,8 +57,8 @@ __all__ = [
     # Campaign models and enums
     "Campaign",
     "CampaignImages",
-    "CampaignApprovalStatus",
-    "CampaignAvailabilityStatus",
+    "CampaignApprovalEnum",
+    "CampaignAvailabilityEnum",
     # Transaction models and enums
     "Transactions",
     "Settings",
