@@ -5,6 +5,10 @@ from sqlalchemy.orm import relationship
 import enum
 from app.core.database import Base
 
+# ==========================================
+# ENUMS
+# ==========================================
+
 class PosterStatusEnum(str, enum.Enum):
     Pending = "Pending"
     Accepted = "Accepted"
@@ -23,6 +27,10 @@ class RequesterStatusEnum(str, enum.Enum):
 class ProductSourceEnum(str, enum.Enum):
     Poster = "Poster"
     Requester = "Requester"
+
+# ==========================================
+# MODELS
+# ==========================================
 
 class Transaction(Base):
     __tablename__ = "Transactions"

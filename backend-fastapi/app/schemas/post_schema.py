@@ -118,6 +118,8 @@ class PostRead(PostBase):
     reviewed_by: Optional[EmailStr] = None
     reviewed_at: Optional[datetime] = None
     reject_reason: Optional[str] = None
+    products: List[PostProductRead]
+    images: List[PostImageRead]
 
     class Config:
         from_attributes = True

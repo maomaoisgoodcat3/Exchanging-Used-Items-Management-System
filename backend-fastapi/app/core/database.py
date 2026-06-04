@@ -1,9 +1,8 @@
 # app/core/database.py
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
-from .config import settings # Giả sử bạn đã load config từ .env
+from .config import settings
 
-# Sửa lại chuỗi kết nối theo .env của bạn
 SQLALCHEMY_DATABASE_URL = settings.DATABASE_URL
 
 engine = create_engine(SQLALCHEMY_DATABASE_URL, pool_pre_ping=True)

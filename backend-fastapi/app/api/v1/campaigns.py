@@ -10,7 +10,6 @@ from jose import jwt
 
 from app.core.database import get_db
 from app.services.auth_svc import get_current_user
-# Đã sửa AccountUser thành User cho khớp với DB hiện tại
 from app.models.user import User, Organization, OrganizationMember
 from app.models.campaign import Campaign
 
@@ -23,6 +22,7 @@ except ImportError:
 router = APIRouter(prefix="/api/v1/campaigns", tags=["Campaigns"])
 
 oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
+
 def get_optional_user(token: str = Depends(oauth2_scheme_optional), db: Session = Depends(get_db)):
     if not token: return None
     try:
@@ -43,6 +43,7 @@ class CampaignCreate(BaseModel):
 class CampaignApprovalAction(BaseModel):
     action: str 
     reject_reason: Optional[str] = None
+
 
 @router.get("/")
 def list_campaigns(request: Request, org_email: Optional[str] = None, db: Session = Depends(get_db), current_user: Optional[User] = Depends(get_optional_user)):
@@ -89,6 +90,7 @@ def list_campaigns(request: Request, org_email: Optional[str] = None, db: Sessio
         })
     return result
 
+
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def create_campaign(data: CampaignCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     membership = db.query(OrganizationMember).filter(OrganizationMember.org_email == data.org_email, OrganizationMember.mem_email == current_user.email).first()
@@ -106,6 +108,7 @@ def create_campaign(data: CampaignCreate, db: Session = Depends(get_db), current
     db.add(new_campaign)
     db.commit()
     return {"message": "Đã tạo Chiến dịch, chờ duyệt!", "campaign_id": new_campaign.campaign_id}
+
 
 @router.put("/{campaign_id}")
 def update_campaign(campaign_id: int, data: CampaignCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -132,6 +135,7 @@ def update_campaign(campaign_id: int, data: CampaignCreate, db: Session = Depend
         
     db.commit()
     return {"message": "Đã cập nhật và Gửi lại cho Admin!"}
+
 
 @router.put("/{campaign_id}/approve")
 def approve_campaign(campaign_id: int, data: CampaignApprovalAction, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
