@@ -1,44 +1,23 @@
-// Tệp: src/types/post.ts
+export type PostType = "Selling" | "Trading" | "Donating"; // Theo ENUM bảng Posts
 
-export type PostType = "TRAO_DOI" | "MUA_BAN" | "QUYEN_GOP";
-
-// 1. Thêm định nghĩa các trạng thái bài đăng
-export type PostStatus = "CHỜ DUYỆT" | "ĐANG HIỂN THỊ" | "ĐÃ ẨN" | "ĐÃ BÁN";
+export type PostStatus = "Pending" | "Approved" | "Resending" | "Rejected";
 
 export type ProductItem = {
-  id: string | number;
-  name: string;
-  price: number;
-  quantity: number;
+  product_id: number; // Khớp với bảng Storage
+  product_name: string;
+  product_price: number;
+  product_quantity: number;
 };
 
-export type Post = {
-  id: number;
-  ownerId: string;
+export interface Post {
+  post_id: number; // Khớp với PRIMARY KEY bảng Posts
+  seller_email: string; // Khớp với cột seller_email
+  campaign_id?: number | null;
   title: string;
-  type: PostType;
-  category: string;
-  location: string;
-  
-  images?: string[]; 
-  image?: string; 
-  
   description?: string;
-  condition?: string;
-  
-  sellerName: string;
-  sellerEmail?: string;
-  sellerPhone?: string;
-  
-  campaignId?: string;
-  campaignName?: string;
-
-  products?: ProductItem[];
-  price?: number; 
-  
-  // ==========================================
-  // 2. THÊM 2 TRƯỜNG NÀY VÀO ĐỂ HẾT LỖI
-  // ==========================================
-  status?: PostStatus; 
-  createdAt?: string; 
-};
+  thumbnail_url?: string; // Thay cho image_post_url
+  post_type: PostType;
+  approval: PostStatus;
+  created_at?: string;
+  products?: ProductItem[]; // Dữ liệu từ bảng PostProducts liên kết qua Storage
+}

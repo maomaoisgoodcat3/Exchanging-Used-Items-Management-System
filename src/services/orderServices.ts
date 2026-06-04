@@ -1,43 +1,26 @@
-import { mockOrders } from "../mocks/order.mocks";
 import type { Order } from "../types/order";
 
-const ORDERS_STORAGE_KEY = "uet-marketplace-orders";
+const API_URL = "http://127.0.0.1:8000/api/v1";
 
-const canUseStorage = () => typeof window !== "undefined";
-
-const readStoredOrders = (): Order[] | null => {
-  if (!canUseStorage()) return null;
-
-  try {
-    const rawOrders = window.localStorage.getItem(ORDERS_STORAGE_KEY);
-    return rawOrders ? (JSON.parse(rawOrders) as Order[]) : null;
-  } catch {
-    return null;
-  }
-};
-
-const writeStoredOrders = (orders: Order[]) => {
-  if (!canUseStorage()) return;
-
-  window.localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(orders));
+// Hàm lấy token từ store thật
+const getAuthHeaders = () => {
+  const token = typeof window !== "undefined" ? window.localStorage.getItem("access_token") : "";
+  return { 
+    "Authorization": `Bearer ${token}`, 
+    "Content-Type": "application/json" 
+  };
 };
 
 export async function getOrders(): Promise<Order[]> {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const storedOrders = readStoredOrders();
-
-      if (storedOrders) {
-        resolve(storedOrders);
-        return;
-      }
-
-      writeStoredOrders(mockOrders);
-      resolve(mockOrders);
-    }, 500);
+  const response = await fetch(`${API_URL}/transactions`, {
+    headers: getAuthHeaders(),
   });
+  
+  if (!response.ok) throw new Error("Không thể tải đơn hàng từ hệ thống");
+  return response.json();
 }
 
-export function saveOrders(orders: Order[]) {
-  writeStoredOrders(orders);
+export async function saveOrders(orders: Order[]) {
+  // Logic cập nhật trạng thái đơn hàng nếu cần (ví dụ: PUT/PATCH)
+  console.log("Cập nhật đơn hàng lên server...");
 }

@@ -1,1 +1,0 @@
-export default function PostDetailPage({ params }: { params: { id: string } }) { return <div>Post Detail / Buy Popup: {params.id}</div>; }

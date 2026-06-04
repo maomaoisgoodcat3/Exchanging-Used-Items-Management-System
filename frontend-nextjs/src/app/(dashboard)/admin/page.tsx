@@ -1,1 +1,0 @@
-export default function AdminPage() { return <div>Admin Moderation Page</div>; }

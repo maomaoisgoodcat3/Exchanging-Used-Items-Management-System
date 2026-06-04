@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { useAuth } from "@/hooks/useAuth";
-import { MOCK_ROLE_LABELS } from "@/mocks/user.mocks";
-import type { UserRole } from "@/types/user";
+// Import thẳng từ store thật mà chúng ta đã làm, bỏ qua hook cũ
+import { useAuthStore } from "@/store/authStore"; 
 
 type RoleScope = "admin" | "user";
 
@@ -14,9 +13,15 @@ type RoleDashboardLayoutProps = {
   scope?: RoleScope;
 };
 
-const mockRoles: UserRole[] = ["STUDENT", "CLUB", "ADMIN"];
+// Tạo Label thật thay vì import từ thư mục mocks
+const ROLE_LABELS: Record<string, string> = {
+  STUDENT: "Sinh viên",
+  CLUB: "Câu lạc bộ",
+  ADMIN: "Quản trị viên",
+  MEMBER: "Thành viên",
+};
 
-const getRoleBasePath = (role?: UserRole) => (role === "ADMIN" ? "/admin" : "/user");
+const getRoleBasePath = (role?: string) => (role === "ADMIN" ? "/admin" : "/user");
 
 export default function RoleDashboardLayout({
   children,
@@ -25,13 +30,16 @@ export default function RoleDashboardLayout({
   const [isOpen, setIsOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
-  const { user, mockRole, setMockRole, hydrateMockUser, logout } = useAuth();
+  
+  // Dùng state thật từ useAuthStore
+  const { user, role, hydrateAuth, logout } = useAuthStore();
 
+  // Chạy hàm khôi phục phiên đăng nhập thật
   useEffect(() => {
-    hydrateMockUser();
-  }, [hydrateMockUser]);
+    hydrateAuth();
+  }, [hydrateAuth]);
 
-  const activeRole = user?.role ?? mockRole;
+  const activeRole = role?.toUpperCase() || "MEMBER";
   const roleBasePath = getRoleBasePath(activeRole);
   const expectedScope: RoleScope = activeRole === "ADMIN" ? "admin" : "user";
   const isWrongRoleScope = Boolean(scope && scope !== expectedScope);
@@ -55,12 +63,6 @@ export default function RoleDashboardLayout({
     ];
   }, [activeRole, roleBasePath]);
 
-  const handleRoleChange = (role: UserRole) => {
-    setMockRole(role);
-    setIsOpen(false);
-    router.push(`${getRoleBasePath(role)}/posts`);
-  };
-
   const handleLogout = () => {
     logout();
     router.push("/login");
@@ -75,65 +77,40 @@ export default function RoleDashboardLayout({
           </h1>
           <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
             {scope ? `${scope} layout` : "shared dashboard layout"} · Role:{" "}
-            {MOCK_ROLE_LABELS[activeRole]}
+            {ROLE_LABELS[activeRole] || activeRole}
           </p>
         </div>
 
         <div className="relative">
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className="flex items-center gap-2 rounded-lg bg-blue-100 px-3 py-2"
+            className="flex items-center gap-2 rounded-lg bg-blue-100 px-3 py-2 font-semibold text-blue-800"
           >
-            👤 {user?.fullName ?? "Mock user"}
+            👤 {user?.fullName ?? user?.email ?? "Người dùng"}
             <span>▼</span>
           </button>
 
           {isOpen && (
             <div className="absolute right-0 z-50 mt-2 w-72 rounded-lg bg-white shadow-lg">
               <div className="border-b p-4">
-                <p className="font-medium">{user?.fullName ?? "Mock user"}</p>
+                <p className="font-medium">{user?.fullName ?? "Người dùng"}</p>
                 <p className="text-sm text-gray-500">
-                  {user?.email ?? "mock@uet.edu.vn"}
+                  {user?.email ?? "Đang tải..."}
                 </p>
                 <p className="mt-1 text-xs font-semibold text-blue-600">
-                  Role hiện tại: {MOCK_ROLE_LABELS[activeRole]}
+                  Role hiện tại: {ROLE_LABELS[activeRole] || activeRole}
                 </p>
-                {user?.organization && (
-                  <p className="mt-1 text-xs text-gray-500">
-                    {user.organization.name}
-                  </p>
-                )}
               </div>
 
-              <div className="border-b p-3">
-                <p className="mb-2 text-xs font-semibold uppercase text-gray-500">
-                  Chuyển role mock
-                </p>
-                <div className="grid grid-cols-3 gap-2">
-                  {mockRoles.map((role) => (
-                    <button
-                      key={role}
-                      type="button"
-                      onClick={() => handleRoleChange(role)}
-                      className={`rounded-md px-2 py-1.5 text-xs font-semibold transition ${
-                        activeRole === role
-                          ? "bg-blue-600 text-white"
-                          : "bg-blue-50 text-blue-700 hover:bg-blue-100"
-                      }`}
-                    >
-                      {MOCK_ROLE_LABELS[role]}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              {/* Đã xóa khu vực "Chuyển role mock" vì hệ thống giờ dùng dữ liệu phân quyền thật từ API */}
 
-              <button className="w-full px-4 py-3 text-left hover:bg-blue-100">
+              <button className="w-full px-4 py-3 text-left hover:bg-blue-100 font-medium">
                 Cài đặt tài khoản
               </button>
 
               <button
                 onClick={handleLogout}
-                className="w-full px-4 py-3 text-left hover:bg-blue-100"
+                className="w-full rounded-b-lg px-4 py-3 text-left font-medium text-rose-600 hover:bg-rose-100"
               >
                 Đăng xuất
               </button>
@@ -143,7 +120,7 @@ export default function RoleDashboardLayout({
       </header>
 
       <div className="flex">
-        <aside className="sticky top-0 flex h-screen w-56 flex-col bg-white px-4 py-8 shadow-md">
+        <aside className="sticky top-0 flex h-[calc(100vh-80px)] w-56 flex-col bg-white px-4 py-8 shadow-md">
           <nav className="flex-1 space-y-3 text-md">
             {navItems.map((item) => {
               const isActive = pathname === item.href;
@@ -169,9 +146,9 @@ export default function RoleDashboardLayout({
           {isWrongRoleScope && (
             <div className="mb-4 rounded-2xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
               Bạn đang ở layout `{scope}`, nhưng role hiện tại là{" "}
-              {MOCK_ROLE_LABELS[activeRole]}. Hãy chuyển role hoặc vào đúng khu{" "}
+              {ROLE_LABELS[activeRole] || activeRole}. Hãy chuyển về đúng khu vực của mình:{" "}
               <Link className="font-semibold underline" href={`${roleBasePath}/posts`}>
-                {roleBasePath}
+                Đến {roleBasePath}
               </Link>
               .
             </div>

@@ -1,16 +1,13 @@
-export type OrderStatus = "PROCESSING" | "DELIVERING" | "RECEIVED" | "CANCELLED";
-
-export type PaymentMethod = "Momo" | "COD" | "Ví UET";
+export type PosterStatus = "Pending" | "Accepted" | "Denied" | "Ready for pickup" | "Successful";
+export type RequesterStatus = "Pending" | "Accepted" | "Denied" | "Deposited" | "Successful" | "Unsuccessful";
 
 export interface Order {
-  id: string;
-  buyerId: string;
-  title: string;
-  sellerName: string;
-  quantity: number;
-  total: number;
-  paymentMethod: PaymentMethod;
-  orderedAt: string;
-  status: OrderStatus;
-  image: string;
+  transaction_id: string; // Khớp với transaction_id
+  post_id: number;
+  requester_email: string;
+  service_fee: number;
+  poster_status: PosterStatus;
+  requester_status: RequesterStatus;
+  transaction_date: string;
+  post_title?: string; // Để hiển thị tên bài đăng khi list đơn
 }

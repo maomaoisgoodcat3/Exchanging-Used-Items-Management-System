@@ -9,9 +9,9 @@ from app.core.database import get_db
 from app.services.auth_svc import get_current_user
 
 # Sử dụng chuẩn tên Model mới nhất của chúng ta
-from app.models.users import User, RoleEnum
-from app.models.posts import Post
-from app.models.campaigns import Campaign
+from app.models.users import Users, RoleEnum
+from app.models.posts import Posts
+from app.models.campaigns import Campaigns
 
 from app.schemas.post_schema import PostApprovalAction
 from app.schemas.campaign_schema import CampaignApprovalAction
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/api/v1/admin", tags=["Admin"])
 # ==========================================
 # DEPENDENCY: KIỂM TRA QUYỀN ADMIN
 # ==========================================
-def get_admin_user(current_user: User = Depends(get_current_user)):
+def get_admin_user(current_user: Users = Depends(get_current_user)):
     """Vệ sĩ: Chặn tất cả những ai không phải Admin"""
     # Dùng cách kiểm tra linh hoạt để tránh lỗi Enum
     role_val = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
@@ -37,7 +37,7 @@ def get_admin_user(current_user: User = Depends(get_current_user)):
 # ==========================================
 
 @router.get("/dashboard", response_model=dict)
-def get_admin_dashboard(admin: User = Depends(get_admin_user)):
+def get_admin_dashboard(admin: Users = Depends(get_admin_user)):
     """
     Get admin dashboard statistics (Giữ nguyên Mock Data tạm thời)
     """
@@ -57,13 +57,13 @@ def get_pending_posts(
     limit: int = 20,
     skip: int = 0,
     db: Session = Depends(get_db),
-    admin: User = Depends(get_admin_user)
+    admin: Users = Depends(get_admin_user)
 ):
     """
     Lấy danh sách các bài đăng đang chờ duyệt (KẾT NỐI DB THẬT)
     """
     # Đã sửa thành cột approval theo Database chuẩn
-    posts = db.query(Post).filter(Post.approval == "Pending").offset(skip).limit(limit).all()
+    posts = db.query(Posts).filter(Posts.approval == "Pending").offset(skip).limit(limit).all()
     result = []
     for p in posts:
         result.append({
@@ -82,12 +82,12 @@ def approve_post_admin(
     post_id: int,
     data: PostApprovalAction,
     db: Session = Depends(get_db),
-    admin: User = Depends(get_admin_user)
+    admin: Users = Depends(get_admin_user)
 ):
     """
     Duyệt hoặc từ chối bài đăng (KẾT NỐI DB THẬT)
     """
-    post = db.query(Post).filter(Post.post_id == post_id).first()
+    post = db.query(Posts).filter(Posts.post_id == post_id).first()
     if not post:
         raise HTTPException(status_code=404, detail="Không tìm thấy bài viết")
 
@@ -120,12 +120,12 @@ def get_pending_campaigns(
     limit: int = 20,
     skip: int = 0,
     db: Session = Depends(get_db),
-    admin: User = Depends(get_admin_user)
+    admin: Users = Depends(get_admin_user)
 ):
     """
     Lấy danh sách các chiến dịch đang chờ duyệt (KẾT NỐI DB THẬT)
     """
-    campaigns = db.query(Campaign).filter(Campaign.approval == "Pending").offset(skip).limit(limit).all()
+    campaigns = db.query(Campaigns).filter(Campaigns.approval == "Pending").offset(skip).limit(limit).all()
     result = []
     for c in campaigns:
         result.append({
@@ -143,12 +143,12 @@ def approve_campaign_admin(
     campaign_id: int,
     data: CampaignApprovalAction,
     db: Session = Depends(get_db),
-    admin: User = Depends(get_admin_user)
+    admin: Users = Depends(get_admin_user)
 ):
     """
     Duyệt hoặc từ chối chiến dịch (KẾT NỐI DB THẬT)
     """
-    campaign = db.query(Campaign).filter(Campaign.campaign_id == campaign_id).first()
+    campaign = db.query(Campaigns).filter(Campaigns.campaign_id == campaign_id).first()
     if not campaign:
         raise HTTPException(status_code=404, detail="Không tìm thấy chiến dịch")
 
@@ -179,7 +179,7 @@ def approve_campaign_admin(
 @router.put("/settings/service-fee", response_model=dict)
 def update_service_fee(
     percentage: Decimal,
-    admin: User = Depends(get_admin_user)
+    admin: Users = Depends(get_admin_user)
 ):
     """
     Update global service fee percentage (Giữ nguyên Mock Data tạm thời)
@@ -197,15 +197,15 @@ def list_all_users(
     limit: int = 50,
     skip: int = 0,
     db: Session = Depends(get_db),
-    admin: User = Depends(get_admin_user)
+    admin: Users = Depends(get_admin_user)
 ):
     """
     Lấy danh sách người dùng (KẾT NỐI DB THẬT)
     """
-    query = db.query(User)
+    query = db.query(Users)
     if search:
         # Cập nhật tên cột (email, name)
-        query = query.filter(User.email.contains(search) | User.name.contains(search))
+        query = query.filter(Users.email.contains(search) | Users.name.contains(search))
     
     users = query.offset(skip).limit(limit).all()
     result = []
@@ -225,7 +225,7 @@ def update_user_role(
     email: str,
     role: str,
     db: Session = Depends(get_db),
-    admin: User = Depends(get_admin_user)
+    admin: Users = Depends(get_admin_user)
 ):
     """
     Cập nhật quyền người dùng (KẾT NỐI DB THẬT)

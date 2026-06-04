@@ -1,73 +1,61 @@
 "use client";
 
 import { create } from "zustand";
-import { DEFAULT_MOCK_ROLE, getMockUserByRole } from "../mocks/user.mocks";
 import type { User, UserRole } from "../types/user";
 
 type AuthState = {
   user: User | null;
   token: string | null;
-  mockRole: UserRole;
+  role: UserRole | string;
   setUser: (user: User | null) => void;
   setToken: (token: string | null) => void;
-  setMockRole: (role: UserRole) => void;
-  hydrateMockUser: () => void;
+  login: (token: string, user: User) => void;
   logout: () => void;
+  hydrateAuth: () => void;
 };
 
-const MOCK_ROLE_STORAGE_KEY = "mockRole";
-
-const isUserRole = (value: unknown): value is UserRole =>
-  value === "ADMIN" || value === "STUDENT" || value === "CLUB";
-
-const getStoredMockRole = (): UserRole => {
-  if (typeof window === "undefined") {
-    return DEFAULT_MOCK_ROLE;
-  }
-
-  const storedRole = window.localStorage.getItem(MOCK_ROLE_STORAGE_KEY);
-  return isUserRole(storedRole) ? storedRole : DEFAULT_MOCK_ROLE;
-};
-
-const getMockToken = (role: UserRole) => `mock-token-${role.toLowerCase()}`;
+const TOKEN_KEY = "access_token";
+const USER_KEY = "current_user";
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   token: null,
-  mockRole: DEFAULT_MOCK_ROLE,
+  role: "MEMBER",
   setUser: (user) => set({ user }),
   setToken: (token) => set({ token }),
-  setMockRole: (role) => {
-    const user = getMockUserByRole(role);
-
+  
+  // Hàm đăng nhập thật: Lưu token vào state và localStorage
+  login: (token, user) => {
     if (typeof window !== "undefined") {
-      window.localStorage.setItem(MOCK_ROLE_STORAGE_KEY, role);
-      window.localStorage.setItem("token", getMockToken(role));
+      window.localStorage.setItem(TOKEN_KEY, token);
+      window.localStorage.setItem(USER_KEY, JSON.stringify(user));
     }
-
-    set({
-      user,
-      token: getMockToken(role),
-      mockRole: role,
-    });
+    set({ token, user, role: user.role || "MEMBER" });
   },
-  hydrateMockUser: () => {
-    const role = getStoredMockRole();
 
-    set({
-      user: getMockUserByRole(role),
-      token: getMockToken(role),
-      mockRole: role,
-    });
-  },
+  // Xóa sạch dữ liệu khi đăng xuất
   logout: () => {
     if (typeof window !== "undefined") {
-      window.localStorage.removeItem("token");
+      window.localStorage.removeItem(TOKEN_KEY);
+      window.localStorage.removeItem(USER_KEY);
     }
+    set({ user: null, token: null, role: "MEMBER" });
+  },
 
-    set({
-      user: null,
-      token: null,
-    });
+  // Hàm khôi phục session khi refresh trang
+  hydrateAuth: () => {
+    if (typeof window !== "undefined") {
+      const storedToken = window.localStorage.getItem(TOKEN_KEY);
+      const storedUserStr = window.localStorage.getItem(USER_KEY);
+      
+      if (storedToken && storedUserStr) {
+        try {
+          const user = JSON.parse(storedUserStr);
+          set({ token: storedToken, user, role: user.role || "MEMBER" });
+        } catch (error) {
+          console.error("Lỗi parse user data", error);
+        }
+      }
+    }
   },
 }));

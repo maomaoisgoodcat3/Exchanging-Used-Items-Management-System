@@ -1,48 +1,41 @@
-import { mockPosts } from "@/mocks/post.mocks";
 import type { Post } from "@/types/post";
 
-const POSTS_STORAGE_KEY = "uet-marketplace-posts";
+const API_URL = "http://127.0.0.1:8000/api/v1";
 
-const canUseStorage = () => typeof window !== "undefined";
-
-const readStoredPosts = (): Post[] | null => {
-  if (!canUseStorage()) return null;
-
-  try {
-    const rawPosts = window.localStorage.getItem(POSTS_STORAGE_KEY);
-    return rawPosts ? (JSON.parse(rawPosts) as Post[]) : null;
-  } catch {
-    return null;
-  }
+// Hàm lấy token từ localStorage để xác thực với Backend
+const getAuthHeaders = () => {
+  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : "";
+  return { 
+    "Authorization": `Bearer ${token}`, 
+    "Content-Type": "application/json" 
+  };
 };
 
-const writeStoredPosts = (posts: Post[]) => {
-  if (!canUseStorage()) return;
-
-  window.localStorage.setItem(POSTS_STORAGE_KEY, JSON.stringify(posts));
-};
-
+// 1. Hàm lấy danh sách bài đăng
 export async function getPosts(): Promise<Post[]> {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const storedPosts = readStoredPosts();
-
-      if (storedPosts) {
-        resolve(storedPosts);
-        return;
-      }
-
-      writeStoredPosts(mockPosts);
-      resolve(mockPosts);
-    }, 500);
+  const response = await fetch(`${API_URL}/posts`, {
+    headers: getAuthHeaders(),
   });
+
+  if (!response.ok) {
+    throw new Error("Không thể tải danh sách bài đăng");
+  }
+  
+  return response.json();
 }
 
-export function savePost(post: Post): Post[] {
-  const currentPosts = readStoredPosts() ?? mockPosts;
-  const updatedPosts = [post, ...currentPosts];
+// 2. Hàm lưu bài đăng mới
+export async function savePost(post: Post) {
+  const response = await fetch(`${API_URL}/posts`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(post),
+  });
 
-  writeStoredPosts(updatedPosts);
-
-  return updatedPosts;
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.detail || "Lỗi khi lưu bài đăng");
+  }
+  
+  return response.json();
 }

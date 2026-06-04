@@ -2,27 +2,46 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
-import { useAuth } from "@/hooks/useAuth";
-import { MOCK_ROLE_LABELS } from "@/mocks/user.mocks";
-import type { UserRole } from "@/types/user";
-
-const mockRoles: UserRole[] = ["STUDENT", "CLUB", "ADMIN"];
-
-const getRoleHomePath = (role: UserRole) =>
-  role === "ADMIN" ? "/admin/posts" : "/user/posts";
+import { useState } from "react";
+// Đã xóa import mock data cũ, dùng trực tiếp store thật
+import { useAuthStore } from "@/store/authStore";
+import { authService } from "@/services/auth.service";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { mockRole, setMockRole, hydrateMockUser } = useAuth();
+  const { login } = useAuthStore();
+  
+  // Thêm state để người dùng tự nhập Email & Password thật
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
-  useEffect(() => {
-    hydrateMockUser();
-  }, [hydrateMockUser]);
-
-  const handleLogin = (event: React.FormEvent) => {
+  const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
-    router.push(getRoleHomePath(mockRole));
+    setErrorMsg("");
+    setIsLoading(true);
+    
+    try {
+      // 1. Gọi API đăng nhập thật tới FastAPI (cổng 8000)
+      const data = await authService.login(email, password);
+      
+      // 2. Lưu Token và User vào Global Store & LocalStorage
+      const loggedInUser = data.user || { email, role: "MEMBER" };
+      login(data.access_token, loggedInUser);
+      
+      // 3. Điều hướng đúng layout theo role thật
+      const role = loggedInUser.role?.toUpperCase();
+      if (role === "ADMIN") {
+        router.push("/admin/posts");
+      } else {
+        router.push("/user/posts");
+      }
+    } catch (error: any) {
+      setErrorMsg(error.message || "Sai email hoặc mật khẩu. Vui lòng thử lại!");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -32,71 +51,58 @@ export default function LoginPage() {
           <h1 className="text-3xl font-bold text-blue-600">
             Chào mừng bạn đến với
           </h1>
-
           <h2 className="mt-2 text-xl font-semibold text-gray-800">
             Nền tảng trao đổi đồ cũ UET
           </h2>
-
           <p className="mt-2 text-sm text-gray-500">
-            Chọn role mock để vào đúng layout admin/user.
+            Đăng nhập bằng tài khoản thật để tiếp tục
           </p>
         </div>
 
         <form className="space-y-4" onSubmit={handleLogin}>
-          <div className="rounded-lg border border-blue-100 bg-blue-50 p-3">
-            <p className="mb-2 text-sm font-medium text-blue-900">
-              Role đăng nhập mock
-            </p>
-            <div className="grid grid-cols-3 gap-2">
-              {mockRoles.map((role) => (
-                <button
-                  key={role}
-                  type="button"
-                  onClick={() => setMockRole(role)}
-                  className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                    mockRole === role
-                      ? "bg-blue-600 text-white"
-                      : "bg-white text-blue-700 hover:bg-blue-100"
-                  }`}
-                >
-                  {MOCK_ROLE_LABELS[role]}
-                </button>
-              ))}
+          {errorMsg && (
+            <div className="rounded-lg bg-rose-50 p-3 text-sm font-medium text-rose-600">
+              {errorMsg}
             </div>
-          </div>
+          )}
 
           <div>
-            <label className="mb-2 block text-sm font-medium">Email</label>
+            <label className="mb-2 block text-sm font-medium text-slate-700">Email</label>
             <input
               name="email"
               type="email"
-              value={`${mockRole.toLowerCase()}@uet.edu.vn`}
-              readOnly
-              className="w-full rounded-lg border bg-gray-50 p-3"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Nhập email đã đăng ký..."
+              className="w-full rounded-lg border bg-gray-50 p-3 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              required
             />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium">Mật khẩu</label>
+            <label className="mb-2 block text-sm font-medium text-slate-700">Mật khẩu</label>
             <input
               name="password"
               type="password"
-              value="mock-password"
-              readOnly
-              className="w-full rounded-lg border bg-gray-50 p-3"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Nhập mật khẩu..."
+              className="w-full rounded-lg border bg-gray-50 p-3 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              required
             />
           </div>
 
           <button
             type="submit"
-            className="w-full rounded-lg bg-blue-600 py-3 text-white hover:bg-blue-800"
+            disabled={isLoading}
+            className="mt-2 w-full rounded-lg bg-blue-600 py-3 font-bold text-white transition-colors hover:bg-blue-800 disabled:bg-blue-400 disabled:cursor-not-allowed"
           >
-            Đăng nhập vào {MOCK_ROLE_LABELS[mockRole]} layout
+            {isLoading ? "Đang xử lý..." : "Đăng nhập vào hệ thống"}
           </button>
 
-          <div className="mt-4 flex justify-between text-sm text-blue-500">
-            <Link href="/forgot-password">Quên mật khẩu?</Link>
-            <Link href="/register">Đăng ký</Link>
+          <div className="mt-4 flex justify-between text-sm font-medium text-blue-500">
+            <Link href="/forgot-password" className="hover:underline">Quên mật khẩu?</Link>
+            <Link href="/register" className="hover:underline">Đăng ký ngay</Link>
           </div>
         </form>
       </div>
