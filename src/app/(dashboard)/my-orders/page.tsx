@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+
 import { useAuth } from "../../../hooks/useAuth";
-import { getOrders } from "../../../services/orderServices";
+import { getOrders, saveOrders } from "../../../services/orderServices";
 import type { Order, OrderStatus } from "../../../types/order";
 
 const statusLabels: Record<OrderStatus, string> = {
@@ -14,15 +15,13 @@ const statusLabels: Record<OrderStatus, string> = {
 
 const statusStyles: Record<OrderStatus, string> = {
   PROCESSING: "bg-yellow-100 text-yellow-800",
-  DELIVERING: "bg-blue-100 text-blue-800",
+  DELIVERING: "bg-sky-100 text-sky-800",
   RECEIVED: "bg-emerald-100 text-emerald-800",
   CANCELLED: "bg-red-100 text-red-700",
 };
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("vi-VN", {
-    style: "currency",
-    currency: "VND",
     maximumFractionDigits: 0,
   }).format(value);
 
@@ -31,6 +30,7 @@ export default function MyOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeView, setActiveView] = useState("Layout");
+  const [statusFilter, setStatusFilter] = useState<OrderStatus | "ALL">("ALL");
   const [search, setSearch] = useState("");
 
   useEffect(() => {
@@ -60,93 +60,109 @@ export default function MyOrdersPage() {
         order.sellerName.toLowerCase().includes(normalizedSearch) ||
         order.id.toLowerCase().includes(normalizedSearch) ||
         statusLabels[order.status].toLowerCase().includes(normalizedSearch);
+      const matchesStatus = statusFilter === "ALL" || order.status === statusFilter;
 
-      return isOwner && matchesSearch;
+      return isOwner && matchesSearch && matchesStatus;
     });
-  }, [orders, search, user]);
+  }, [orders, search, statusFilter, user]);
 
   const updateOrderStatus = (orderId: string, status: OrderStatus) => {
-    setOrders((currentOrders) =>
-      currentOrders.map((order) =>
-        order.id === orderId ? { ...order, status } : order
-      )
-    );
+    setOrders((currentOrders) => {
+      const updatedOrders = currentOrders.map((order) =>
+        order.id === orderId ? { ...order, status } : order,
+      );
+
+      saveOrders(updatedOrders);
+
+      return updatedOrders;
+    });
   };
+
+  const trackedCount = user ? orders.filter((order) => order.buyerId === user.id).length : 0;
 
   return (
     <div className="space-y-6">
-      <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
+      <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-sm text-gray-500">UET Marketplace</p>
-            <h1 className="mt-2 text-2xl font-semibold text-slate-900">
-              My Orders
-            </h1>
+            <h1 className="mt-2 text-3xl font-bold text-slate-900">My Orders</h1>
             <p className="mt-1 text-sm text-slate-500">
               Chỉ hiển thị đơn hàng của {user?.fullName ?? "tài khoản hiện tại"}.
             </p>
           </div>
 
           <button
+            className="inline-flex items-center justify-center rounded-full bg-cyan-400 px-6 py-3 text-sm font-bold text-slate-900 shadow-sm transition hover:bg-cyan-500"
+            onClick={() => alert(`Bạn đang theo dõi ${trackedCount} đơn hàng.`)}
             type="button"
-            className="inline-flex items-center justify-center rounded-full bg-cyan-400 px-5 py-3 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-cyan-500"
           >
             + Theo dõi đơn hàng
           </button>
         </div>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-[auto_1fr] md:items-center">
+        <div className="mt-6 grid gap-4 md:grid-cols-[auto_auto_1fr] md:items-center">
           <div className="flex flex-wrap gap-3">
             {[
               { label: "Bố cục", value: "Layout" },
               { label: "Bộ lọc", value: "Filter" },
             ].map((item) => (
               <button
-                key={item.value}
-                type="button"
-                onClick={() => setActiveView(item.value)}
-                className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                className={`rounded-full px-5 py-2.5 text-sm font-semibold transition ${
                   activeView === item.value
                     ? "bg-slate-900 text-white"
                     : "bg-slate-100 text-slate-700 hover:bg-slate-200"
                 }`}
+                key={item.value}
+                onClick={() => setActiveView(item.value)}
+                type="button"
               >
                 {item.label}
               </button>
             ))}
           </div>
 
+          <select
+            className="rounded-full border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-cyan-500 focus:bg-white"
+            onChange={(event) => setStatusFilter(event.target.value as OrderStatus | "ALL")}
+            value={statusFilter}
+          >
+            <option value="ALL">Tất cả trạng thái</option>
+            <option value="PROCESSING">Đang xử lý</option>
+            <option value="DELIVERING">Đang giao</option>
+            <option value="RECEIVED">Đã nhận</option>
+            <option value="CANCELLED">Đã hủy</option>
+          </select>
+
           <div className="relative">
             <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
               🔍
             </span>
             <input
-              value={search}
+              className="w-full rounded-full border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white"
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Nhập từ khóa để tìm kiếm..."
-              className="w-full rounded-full border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white"
+              value={search}
             />
           </div>
         </div>
-      </div>
+      </section>
 
       {isLoading ? (
         <div className="rounded-3xl bg-white p-12 text-center text-slate-500">
           Đang tải đơn hàng của bạn...
         </div>
       ) : (
-        <div className="grid gap-5 xl:grid-cols-2">
+        <section className="grid gap-5 xl:grid-cols-2">
           {myOrders.map((order, index) => (
             <article
+              className="rounded-[26px] bg-white p-4 shadow-sm ring-1 ring-slate-100 transition hover:-translate-y-0.5 hover:shadow-md"
               key={order.id}
-              className="rounded-[26px] bg-white p-4 shadow-sm ring-1 ring-slate-100"
             >
               <div className="mb-3 flex items-center justify-between gap-3">
-                <h2 className="font-semibold text-slate-900">
-                  Đơn hàng {index + 1}
-                </h2>
+                <h2 className="font-bold text-slate-900">Đơn hàng {index + 1}</h2>
                 <span
-                  className={`rounded-full px-4 py-1 text-xs font-medium ${
+                  className={`rounded-full px-4 py-1 text-xs font-semibold ${
                     statusStyles[order.status]
                   }`}
                 >
@@ -154,38 +170,34 @@ export default function MyOrdersPage() {
                 </span>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-[96px_1fr]">
+              <div className="grid gap-4 sm:grid-cols-[96px_1fr]">
                 <div
-                  className="h-24 w-24 rounded-sm border border-slate-200 bg-cover bg-center"
+                  aria-label={order.title}
+                  className="h-24 w-24 rounded-sm border border-slate-200 bg-cover bg-center shadow-inner"
+                  role="img"
                   style={{ backgroundImage: order.image }}
                 />
 
                 <div className="min-w-0 space-y-3">
                   <div>
-                    <p className="font-medium text-slate-900">{order.title}</p>
-                    <p className="mt-1 text-sm text-slate-600">
-                      Người bán: {order.sellerName}
-                    </p>
+                    <p className="font-semibold text-slate-900">{order.title}</p>
+                    <p className="mt-1 text-sm text-slate-600">Người bán: {order.sellerName}</p>
                   </div>
 
                   <div className="grid grid-cols-3 divide-x divide-slate-200 rounded-2xl bg-slate-50 py-3 text-center text-sm">
                     <div>
                       <p className="text-slate-500">Số lượng</p>
-                      <p className="font-semibold text-slate-900">
-                        {order.quantity}
-                      </p>
+                      <p className="font-semibold text-slate-900">{order.quantity}</p>
                     </div>
                     <div>
                       <p className="text-slate-500">Tổng tiền</p>
                       <p className="font-semibold text-slate-900">
-                        {formatCurrency(order.total)}
+                        {formatCurrency(order.total)}đ
                       </p>
                     </div>
                     <div>
                       <p className="text-slate-500">Thanh toán</p>
-                      <p className="font-semibold text-slate-900">
-                        {order.paymentMethod}
-                      </p>
+                      <p className="font-semibold text-slate-900">{order.paymentMethod}</p>
                     </div>
                   </div>
                 </div>
@@ -199,31 +211,31 @@ export default function MyOrdersPage() {
 
               <div className="mt-4 flex flex-wrap justify-end gap-3">
                 <button
-                  type="button"
                   className="rounded-full bg-blue-100 px-6 py-2 text-sm font-medium text-slate-700 transition hover:bg-blue-200"
+                  type="button"
                 >
                   Chi tiết
                 </button>
                 <button
-                  type="button"
                   className="rounded-full bg-blue-100 px-6 py-2 text-sm font-medium text-slate-700 transition hover:bg-blue-200"
+                  type="button"
                 >
                   Liên hệ
                 </button>
                 {order.status === "PROCESSING" && (
                   <button
-                    type="button"
-                    onClick={() => updateOrderStatus(order.id, "CANCELLED")}
                     className="rounded-full bg-red-400 px-6 py-2 text-sm font-medium text-white transition hover:bg-red-500"
+                    onClick={() => updateOrderStatus(order.id, "CANCELLED")}
+                    type="button"
                   >
                     Hủy đơn
                   </button>
                 )}
                 {order.status === "DELIVERING" && (
                   <button
-                    type="button"
-                    onClick={() => updateOrderStatus(order.id, "RECEIVED")}
                     className="rounded-full bg-emerald-300 px-6 py-2 text-sm font-medium text-slate-800 transition hover:bg-emerald-400"
+                    onClick={() => updateOrderStatus(order.id, "RECEIVED")}
+                    type="button"
                   >
                     Xác nhận đã nhận
                   </button>
@@ -237,7 +249,7 @@ export default function MyOrdersPage() {
               Tài khoản này chưa có đơn hàng nào.
             </div>
           )}
-        </div>
+        </section>
       )}
     </div>
   );

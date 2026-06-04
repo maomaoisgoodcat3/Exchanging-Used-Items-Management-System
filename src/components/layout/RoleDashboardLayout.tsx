@@ -41,7 +41,7 @@ export default function RoleDashboardLayout({
       return [
         { href: `${roleBasePath}/posts`, label: "📝 Posts" },
         { href: `${roleBasePath}/campaigns`, label: "🔖 Campaigns" },
-        { href: `${roleBasePath}/notifications`, label: "📮 Notifications" },
+        { href: `${roleBasePath}/notifications`, label: "🛡️ Moderation" },
       ];
     }
 

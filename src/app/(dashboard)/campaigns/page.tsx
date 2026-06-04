@@ -11,6 +11,8 @@ interface Campaign {
   createdAt: string;
   image: string;
   status: string;
+  startDate?: string;
+  endDate?: string;
   leaderEmail: string;
   leaderPhone: string;
   description: string;
@@ -29,6 +31,8 @@ const campaignData: Campaign[] = [
     title: "Chiến dịch Giảm Nhựa",
     organizationName: "CLB Xanh UET",
     createdAt: "12/05/2026",
+    startDate: "12/05/2026",
+    endDate: "30/06/2026",
     image:
       "https://images.unsplash.com/photo-1517153295760-4a94ff3fdef9?auto=format&fit=crop&w=800&q=80",
     status: "Đang chạy",
@@ -42,6 +46,8 @@ const campaignData: Campaign[] = [
     title: "Quyên góp Sách Cũ",
     organizationName: "Tổ chức Sách Xanh",
     createdAt: "08/05/2026",
+    startDate: "08/05/2026",
+    endDate: "20/05/2026",
     image:
       "https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&w=800&q=80",
     status: "Đã kết thúc",
@@ -55,6 +61,8 @@ const campaignData: Campaign[] = [
     title: "Thu gom Pin Cũ",
     organizationName: "CLB Kỹ thuật",
     createdAt: "20/05/2026",
+    startDate: "20/06/2026",
+    endDate: "30/06/2026",
     image:
       "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=800&q=80",
     status: "Sắp diễn ra",
@@ -71,6 +79,64 @@ const statusStyles: Record<string, string> = {
   "Sắp diễn ra": "bg-green-100 text-green-700",
 };
 
+const parseCampaignDate = (dateValue?: string) => {
+  if (!dateValue) return null;
+
+  if (dateValue.includes("-")) {
+    const parsedDate = new Date(dateValue);
+    return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
+  }
+
+  const [day, month, year] = dateValue.split("/").map(Number);
+
+  if (!day || !month || !year) return null;
+
+  return new Date(year, month - 1, day);
+};
+
+const toDateOnly = (date: Date) =>
+  new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+const formatInputDate = (dateValue: string) =>
+  new Date(dateValue).toLocaleDateString("vi-VN");
+
+const getCampaignStatus = (campaign: Campaign) => {
+  const startDate = parseCampaignDate(campaign.startDate ?? campaign.createdAt);
+  const endDate = parseCampaignDate(campaign.endDate);
+
+  if (!startDate || !endDate) {
+    return campaign.status || "Đang chạy";
+  }
+
+  const today = toDateOnly(new Date());
+  const normalizedStartDate = toDateOnly(startDate);
+  const normalizedEndDate = toDateOnly(endDate);
+
+  if (today < normalizedStartDate) return "Sắp diễn ra";
+  if (today > normalizedEndDate) return "Đã kết thúc";
+
+  return "Đang chạy";
+};
+
+const getCampaignStatusStyle = (status: string) => {
+  if (status === "Sắp diễn ra") return "bg-green-100 text-green-700";
+  if (status === "Đã kết thúc") return "bg-gray-100 text-gray-700";
+  if (status === "Đang chạy") return "bg-blue-100 text-blue-700";
+
+  return statusStyles[status] ?? "bg-slate-100 text-slate-700";
+};
+
+const normalizeCampaigns = (campaigns: Campaign[]) =>
+  campaigns.map((campaign) => {
+    const defaultCampaign = campaignData.find((item) => item.id === campaign.id);
+
+    return {
+      ...campaign,
+      startDate: campaign.startDate ?? defaultCampaign?.startDate,
+      endDate: campaign.endDate ?? defaultCampaign?.endDate,
+    };
+  });
+
 const readFileAsDataUrl = (file: File) =>
   new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -82,14 +148,16 @@ const readFileAsDataUrl = (file: File) =>
 
 const getInitialCampaigns = () => {
   if (typeof window === "undefined") {
-    return campaignData;
+    return normalizeCampaigns(campaignData);
   }
 
   try {
     const storedCampaigns = window.localStorage.getItem(CAMPAIGNS_STORAGE_KEY);
-    return storedCampaigns ? (JSON.parse(storedCampaigns) as Campaign[]) : campaignData;
+    return storedCampaigns
+      ? normalizeCampaigns(JSON.parse(storedCampaigns) as Campaign[])
+      : normalizeCampaigns(campaignData);
   } catch {
-    return campaignData;
+    return normalizeCampaigns(campaignData);
   }
 };
 
@@ -156,15 +224,16 @@ export default function CampaignsPage() {
     const title = String(formData.get("title") ?? "").trim();
     const description = String(formData.get("description") ?? "").trim();
     const startDate = String(formData.get("startDate") ?? "");
+    const endDate = String(formData.get("endDate") ?? "");
     const campaignIndex = campaigns.length + 1;
 
     const newCampaign: Campaign = {
       id: `C-${String(campaignIndex).padStart(3, "0")}`,
       title,
       organizationName: user?.organization?.name ?? "Tổ chức của bạn",
-      createdAt: startDate
-        ? new Date(startDate).toLocaleDateString("vi-VN")
-        : new Date().toLocaleDateString("vi-VN"),
+      createdAt: new Date().toLocaleDateString("vi-VN"),
+      startDate: startDate ? formatInputDate(startDate) : undefined,
+      endDate: endDate ? formatInputDate(endDate) : undefined,
       image:
         selectedImages[0]?.previewUrl ??
         "https://placehold.co/800x400/e0f2fe/0f172a?text=Campaign",
@@ -356,19 +425,22 @@ export default function CampaignsPage() {
       )}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {filteredCampaigns.map((campaign) => (
-          <div
-            key={campaign.id}
-            className="rounded-[24px] border border-slate-200 bg-slate-50 p-6 shadow-sm"
-          >
+        {filteredCampaigns.map((campaign) => {
+          const campaignStatus = getCampaignStatus(campaign);
+
+          return (
+            <div
+              key={campaign.id}
+              className="rounded-[24px] border border-slate-200 bg-slate-50 p-6 shadow-sm"
+            >
             <div className="flex items-center justify-between text-sm text-slate-500">
               <span>{campaign.id}</span>
               <span
                 className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                  statusStyles[campaign.status]
+                  getCampaignStatusStyle(campaignStatus)
                 }`}
               >
-                {campaign.status}
+                {campaignStatus}
               </span>
             </div>
 
@@ -419,8 +491,9 @@ export default function CampaignsPage() {
             >
               Xem chi tiết chiến dịch
             </button>
-          </div>
-        ))}
+            </div>
+          );
+        })}
 
         {filteredCampaigns.length === 0 && (
           <div className="col-span-full rounded-3xl border border-dashed border-slate-300 bg-white p-12 text-center text-slate-500">
