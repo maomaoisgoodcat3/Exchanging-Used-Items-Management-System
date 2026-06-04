@@ -5,7 +5,6 @@ pydantic[email]
 python-jose[cryptography]
 passlib[bcrypt]
 python-multipart
-
 # update 
 pymysql 
 cryptography

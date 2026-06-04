@@ -33,6 +33,9 @@ class Campaign(Base):
     organization = relationship("Organization", back_populates="campaigns")
     posts = relationship("Post", back_populates="campaign")
     images = relationship("CampaignImage", back_populates="campaign", cascade="all, delete-orphan")
+    
+    # ĐÂY LÀ DÒNG BỊ THIẾU GÂY RA LỖI MAPPING
+    reviewer = relationship("User", back_populates="reviewed_campaigns")
 
 
 class CampaignImage(Base):

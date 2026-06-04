@@ -1,57 +1,69 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 from decimal import Decimal
 
-class TransactionBase(BaseModel):
-    post_id: int # ĐÃ THÊM: Thiếu trường này thì không biết mua từ bài đăng nào
+# ==========================================
+# 1. TRANSACTION PRODUCTS (Sản phẩm giao dịch)
+# ==========================================
+class TransactionProductBase(BaseModel):
     product_id: int
-    buyer_email: EmailStr
     quantity: int = Field(..., gt=0)
+    product_source: str = Field(pattern="^(Poster|Requester)$")
+
+class TransactionProductCreate(TransactionProductBase):
+    pass
+
+class TransactionProductRead(TransactionProductBase):
+    class Config:
+        from_attributes = True
+
+# ==========================================
+# 2. TRANSACTIONS (Giao dịch chính)
+# ==========================================
+class TransactionBase(BaseModel):
+    post_id: int
+    requester_email: EmailStr
 
 class TransactionCreate(TransactionBase):
-    pass
+    products: List[TransactionProductCreate] = Field(..., min_length=1, description="List of products in this transaction")
 
 class TransactionRead(TransactionBase):
     transaction_id: int
     service_fee: Decimal
-    order_status: str
-    transaction_status: str
+    poster_status: str
+    requester_status: str
     transaction_date: datetime
 
     class Config:
         from_attributes = True
 
-class TransactionListRead(BaseModel):
-    transaction_id: int
-    post_id: int
-    product_id: int
-    buyer_email: EmailStr
-    quantity: int
-    service_fee: Decimal
-    order_status: str
-    transaction_status: str
-    transaction_date: datetime
+class TransactionDetailRead(TransactionRead):
+    products: List[TransactionProductRead]
 
-    class Config:
-        from_attributes = True
+# CLASS BỊ THIẾU ĐÃ ĐƯỢC THÊM LẠI
+class TransactionListRead(TransactionRead):
+    pass
 
 class TransactionFilter(BaseModel):
-    buyer_email: Optional[EmailStr] = None
-    product_id: Optional[int] = None
-    order_status: Optional[str] = None
-    transaction_status: Optional[str] = None
+    requester_email: Optional[EmailStr] = None
+    post_id: Optional[int] = None
+    poster_status: Optional[str] = None
+    requester_status: Optional[str] = None
     date_from: Optional[datetime] = None
     date_to: Optional[datetime] = None
-    sort_by: Optional[str] = Field(default="transaction_date", pattern="^(transaction_date|order_status)$")
+    sort_by: Optional[str] = Field(default="transaction_date", pattern="^(transaction_date|service_fee)$")
     sort_order: Optional[str] = Field(default="desc", pattern="^(asc|desc)$")
     skip: int = Field(default=0, ge=0)
     limit: int = Field(default=10, ge=1, le=100)
 
 class TransactionStatusUpdate(BaseModel):
-    order_status: Optional[str] = Field(None, pattern="^(Pending|Ready for pickup|Successful)$")
-    transaction_status: Optional[str] = Field(None, pattern="^(Pending|Deposited|Successful)$")
+    poster_status: Optional[str] = Field(None, pattern="^(Pending|Accepted|Denied|Ready for pickup|Successful)$")
+    requester_status: Optional[str] = Field(None, pattern="^(Pending|Accepted|Denied|Deposited|Successful|Unsuccessful)$")
 
+# ==========================================
+# 3. SETTINGS
+# ==========================================
 class SettingsBase(BaseModel):
     setting_name: str
     setting_value: Decimal = Field(..., ge=0)
@@ -72,6 +84,9 @@ class SettingsRead(SettingsBase):
     class Config:
         from_attributes = True
 
+# ==========================================
+# 4. PAYMENT, CART & RETURN (Của team bạn)
+# ==========================================
 class PaymentMethodBase(BaseModel):
     payment_type: str = Field(pattern="^(COD|QR)$")
 

@@ -303,18 +303,16 @@ const toBase64 = file => new Promise((resolve, reject) => {
     reader.onerror = error => reject(error);
 });
 
-async function uploadImageToImgBB(file) {
-    try {
-        const base64Img = await toBase64(file);
-        const formData = new FormData(); 
-        formData.append('key', '63a6a1d82136e0952086fc505c2196fb'); 
-        formData.append('image', base64Img); 
-        
-        const res = await fetch(`https://api.imgbb.com/1/upload`, { method: 'POST', body: formData });
-        const data = await res.json();
-        if(data.success) return data.data.url;
-    } catch (e) { console.error("ImgBB Error:", e); }
-    throw new Error("Lỗi Upload ảnh Cloud!");
+async function uploadImageToLocal(file) {
+    const formData = new FormData(); 
+    formData.append('file', file); // Chú ý: Backend đang đón tên biến là 'file'
+    
+    // Gọi thẳng vào API nội bộ vừa tạo
+    const res = await fetch(`${API_URL}/upload/`, { method: 'POST', body: formData });
+    const data = await res.json();
+    
+    if(res.ok && data.url) return data.url;
+    throw new Error("Lỗi Upload ảnh Local!");
 }
 
 const oldSwitchMainTab = switchMainTab;
@@ -468,7 +466,10 @@ async function handleSubmitCampaign() {
 
     try {
         if(!orgEmail || !title || !desc || !start || !end) throw new Error("Vui lòng điền đủ thông tin bắt buộc!");
-        if(fileInput.files.length > 0) { btn.innerText = "Đang Upload ảnh lên Cloud..."; imageUrl = await uploadImageToImgBB(fileInput.files[0]); }
+        if(fileInput.files.length > 0) { 
+             btn.innerText = "Đang lưu ảnh vào hệ thống..."; 
+             imageUrl = await uploadImageToLocal(fileInput.files[0]); 
+        }
         btn.innerText = "Đang xử lý...";
         
         const payload = {
