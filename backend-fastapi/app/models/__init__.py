@@ -31,8 +31,9 @@ from .campaigns import (
 from .transactions import (
     Transactions,
     Settings,
-    TransactionStatusEnum,
-    OrderStatusEnum,
+    PosterStatusEnum,
+    RequesterStatusEnum,
+    ProductSourceEnum,
 )
 
 __all__ = [

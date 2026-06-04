@@ -13,8 +13,8 @@ from app.core.database import get_db
 from app.services.auth_svc import get_current_user
 
 # Sử dụng Models chuẩn xác của chúng ta
-from app.models.user import User
-from app.models.post import Post, PostProduct, ProductImage, Storage, PostImage
+from app.models.users import Users
+from app.models.posts import Posts, PostProducts, ProductImages, Storage, ProductImages
 
 router = APIRouter(prefix="/api/v1/posts", tags=["Posts"])
 
@@ -30,11 +30,11 @@ def list_posts(
     db: Session = Depends(get_db)
 ):
     """API CHO USER THƯỜNG (Chỉ lấy bài đã duyệt)"""
-    query = db.query(Post).filter(Post.approval == "Approved")
+    query = db.query(Posts).filter(Posts.approval == "Approved")
     if post_type:
-        query = query.filter(Post.post_type == post_type)
+        query = query.filter(Posts.post_type == post_type)
         
-    posts = query.order_by(Post.created_at.desc()).offset(skip).limit(limit).all()
+    posts = query.order_by(Posts.created_at.desc()).offset(skip).limit(limit).all()
     
     return [{
         "post_id": p.post_id,
@@ -50,14 +50,14 @@ def list_posts(
 @router.get("/admin-all", response_model=list)
 def get_all_posts_admin(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: Users = Depends(get_current_user)
 ):
     """API CHO ADMIN (Lấy mọi bài viết, kể cả Pending/Rejected)"""
     role_val = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
     if "Admin" not in role_val:
         raise HTTPException(status_code=403, detail="Chỉ Admin mới có quyền xem toàn bộ bài viết.")
         
-    posts = db.query(Post).order_by(Post.created_at.desc()).all()
+    posts = db.query(Posts).order_by(Posts.created_at.desc()).all()
     return [{
         "post_id": p.post_id,
         "title": p.title,
@@ -73,10 +73,10 @@ def get_all_posts_admin(
 @router.get("/my-posts", response_model=list)
 def get_my_posts(
     db: Session = Depends(get_db), 
-    current_user: User = Depends(get_current_user)
+    current_user: Users = Depends(get_current_user)
 ):
     """API CHO NGƯỜI ĐĂNG BÀI (Lấy mọi bài của chính họ)"""
-    posts = db.query(Post).filter(Post.seller_email == current_user.email).order_by(Post.created_at.desc()).all()
+    posts = db.query(Posts).filter(Posts.seller_email == current_user.email).order_by(Posts.created_at.desc()).all()
     return [{
         "post_id": p.post_id,
         "title": p.title,
@@ -97,14 +97,14 @@ def get_my_posts(
 def create_post(
     data: PostCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: Users = Depends(get_current_user)
 ):
     """Tạo bài đăng mới & Tự động lưu sản phẩm vào Kho đồ (Storage)"""
     if not data.title or not data.description:
         raise HTTPException(status_code=400, detail="Title and description are required")
     
     # 1. Tạo bảng Post chính
-    new_post = Post(
+    new_post = Posts(
         seller_email=current_user.email,
         campaign_id=data.campaign_id,
         title=data.title,
@@ -131,7 +131,7 @@ def create_post(
             db.flush() # Để lấy product_id vừa sinh ra
             
             # Tạo liên kết vào bảng trung gian
-            new_prod_link = PostProduct(
+            new_prod_link = PostProducts(
                 post_id=new_post.post_id,
                 product_id=new_storage_item.product_id
             )
@@ -140,7 +140,7 @@ def create_post(
     # 3. Xử lý Images
     if data.images:
         for img in data.images:
-            new_img = PostImage(
+            new_img = ProductImages(
                 post_id=new_post.post_id,
                 image_url=img.image_url
             )
@@ -160,14 +160,14 @@ def approve_post(
     post_id: int,
     data: PostApprovalAction,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: Users = Depends(get_current_user)
 ):
     """Admin duyệt / từ chối bài viết"""
     role_val = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
     if "Admin" not in role_val:
         raise HTTPException(status_code=403, detail="Chỉ Admin mới có quyền duyệt bài.")
         
-    post = db.query(Post).filter(Post.post_id == post_id).first()
+    post = db.query(Posts).filter(Posts.post_id == post_id).first()
     if not post:
         raise HTTPException(status_code=404, detail="Không tìm thấy bài viết")
 
@@ -197,10 +197,10 @@ def approve_post(
 def toggle_post_status(
     post_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: Users = Depends(get_current_user)
 ):
     """Owner tự đổi trạng thái Available <-> Closed"""
-    post = db.query(Post).filter(Post.post_id == post_id).first()
+    post = db.query(Posts).filter(Posts.post_id == post_id).first()
     if not post:
         raise HTTPException(status_code=404, detail="Không tìm thấy bài viết")
     if post.seller_email != current_user.email:
@@ -220,7 +220,7 @@ def toggle_post_status(
 @router.post("/{post_id}/mark-sold", response_model=dict)
 def mark_post_sold(
     post_id: int,
-    current_user: User = Depends(get_current_user)
+    current_user: Users = Depends(get_current_user)
 ):
     """Mark post as sold (Giữ nguyên Mock Data)"""
     return {
@@ -234,7 +234,7 @@ def mark_post_sold(
 def update_post(
     post_id: int,
     data: PostUpdate,
-    current_user: User = Depends(get_current_user)
+    current_user: Users = Depends(get_current_user)
 ):
     """Update post information (Giữ nguyên Mock Data)"""
     return {
@@ -244,7 +244,7 @@ def update_post(
 
 
 @router.delete("/{post_id}", response_model=dict)
-def delete_post(post_id: int, current_user: User = Depends(get_current_user)):
+def delete_post(post_id: int, current_user: Users = Depends(get_current_user)):
     """Delete a post (Giữ nguyên Mock Data)"""
     return {
         "message": "Post deleted successfully",
@@ -291,7 +291,7 @@ def get_post_products(post_id: int):
 def add_product_to_post(
     post_id: int,
     storage_product_ids: List[int],
-    current_user: User = Depends(get_current_user)
+    current_user: Users = Depends(get_current_user)
 ):
     return {"message": "Products added successfully", "post_id": post_id}
 
@@ -300,7 +300,7 @@ def add_product_to_post(
 def remove_product_from_post(
     post_id: int,
     product_id: int,
-    current_user: User = Depends(get_current_user)
+    current_user: Users = Depends(get_current_user)
 ):
     return {"message": "Product removed successfully", "post_id": post_id, "product_id": product_id}
 
@@ -309,7 +309,7 @@ def remove_product_from_post(
 def add_image_to_post(
     post_id: int,
     data: PostImageCreate,
-    current_user: User = Depends(get_current_user)
+    current_user: Users = Depends(get_current_user)
 ):
     return {"message": "Image added successfully", "post_id": post_id, "image_id": 1}
 
@@ -318,7 +318,7 @@ def add_image_to_post(
 def remove_image_from_post(
     post_id: int,
     image_id: int,
-    current_user: User = Depends(get_current_user)
+    current_user: Users = Depends(get_current_user)
 ):
     return {"message": "Image removed successfully", "post_id": post_id, "image_id": image_id}
 

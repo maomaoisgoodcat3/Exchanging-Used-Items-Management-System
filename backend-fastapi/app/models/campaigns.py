@@ -1,53 +1,43 @@
-# app/models/campaign.py
-from sqlalchemy import Column, Integer, String, Enum, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Enum, DateTime, ForeignKey, Text, TIMESTAMP
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
 from app.core.database import Base
 
-# ==========================================
-# ENUMS
-# ==========================================
-
 class CampaignApprovalEnum(str, enum.Enum):
     Pending = "Pending"
     Approved = "Approved"
-    Rejected = "Rejected"
     Resending = "Resending"
+    Rejected = "Rejected"
 
 class CampaignAvailabilityEnum(str, enum.Enum):
     Open = "Open"
     Closed = "Closed"
 
-# ==========================================
-# MODELS
-# ==========================================
-
 class Campaigns(Base):
-    __tablename__ = "campaigns"
-    campaign_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    org_email = Column(String(100), ForeignKey("Organizations.org_email"), nullable=False)
+    __tablename__ = "Campaigns"
+    campaign_id = Column(Integer, primary_key=True, autoincrement=True)
+    org_email = Column(String(100), ForeignKey("Organizations.org_email", ondelete="CASCADE"), nullable=False)
     title = Column(String(200), nullable=False)
     description = Column(Text)
     start_date = Column(DateTime)
     end_date = Column(DateTime)
-    approval = Column(Enum(CampaignApprovalEnum), default=CampaignApprovalEnum.Pending)
-    availability = Column(Enum(CampaignAvailabilityEnum), default=CampaignAvailabilityEnum.Open)
     reviewed_by = Column(String(100), ForeignKey("Users.email"))
-    reviewed_at = Column(DateTime)
+    reviewed_at = Column(TIMESTAMP, onupdate=func.now())
+    availability = Column(Enum(CampaignAvailabilityEnum), nullable=False, default=CampaignAvailabilityEnum.Closed)
+    approval = Column(Enum(CampaignApprovalEnum), nullable=False, default=CampaignApprovalEnum.Pending)
     reject_reason = Column(Text)
 
-    r_campaigns_posts = relationship("Posts", back_populates="r_posts_campaigns")
-    r_campaigns_organizations = relationship("Organizations", back_populates="r_organizations_campaigns")
-    r_campaigns_users = relationship("Users", back_populates="r_users_campaigns")
-    r_campaigns_campaignimages = relationship("CampaignImages", back_populates="r_campaignimages_campaigns")
+    organization = relationship("Organizations", back_populates="campaigns")
+    posts = relationship("Posts", back_populates="campaign")
+    images = relationship("CampaignImages", back_populates="campaign", cascade="all, delete-orphan")
+    reviewer = relationship("Users", back_populates="reviewed_campaigns")
 
 class CampaignImages(Base):
-    __tablename__ = 'campaignimages'
-    
+    __tablename__ = "CampaignImages"
     image_id = Column(Integer, primary_key=True, autoincrement=True)
-    campaign_id = Column(Integer, ForeignKey('Campaigns.campaign_id'), nullable=False)
+    campaign_id = Column(Integer, ForeignKey("Campaigns.campaign_id"), nullable=False)
     image_url = Column(String(500))
-    uploaded_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    uploaded_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
 
-    r_campaignimages_campaigns = relationship("Campaigns", back_populates="images")
+    campaign = relationship("Campaigns", back_populates="images")

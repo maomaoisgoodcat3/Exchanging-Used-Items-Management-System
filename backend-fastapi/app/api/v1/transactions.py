@@ -10,7 +10,7 @@ from app.schemas.transaction_schema import (
     SettingsCreate, SettingsRead, TransactionDetailRead
 )
 from app.services.auth_svc import get_current_user
-from app.models.user import User
+from app.models.users import Users
 
 router = APIRouter(prefix="/api/v1/transactions", tags=["Transactions & Payments"])
 
@@ -20,7 +20,7 @@ def list_transactions(
     requester_status: Optional[str] = None,
     limit: int = 20,
     skip: int = 0,
-    current_user: User = Depends(get_current_user)
+    current_user: Users = Depends(get_current_user)
 ):
     """
     List transactions for current user
@@ -46,7 +46,7 @@ def list_transactions(
 @router.post("/", response_model=dict, status_code=status.HTTP_201_CREATED)
 def create_transaction(
     data: TransactionCreate,
-    current_user: User = Depends(get_current_user)
+    current_user: Users = Depends(get_current_user)
 ):
     """
     Create a new transaction (purchase/trade/donate)
@@ -67,7 +67,7 @@ def create_transaction(
 @router.get("/{transaction_id}", response_model=TransactionDetailRead)
 def get_transaction_detail(
     transaction_id: int,
-    current_user: User = Depends(get_current_user)
+    current_user: Users = Depends(get_current_user)
 ):
     """
     Get transaction details including list of products
@@ -94,7 +94,7 @@ def get_transaction_detail(
 def update_transaction_status(
     transaction_id: int,
     data: TransactionStatusUpdate,
-    current_user: User = Depends(get_current_user)
+    current_user: Users = Depends(get_current_user)
 ):
     """
     Update transaction status
@@ -112,7 +112,7 @@ def update_transaction_status(
 @router.post("/payment/initiate", response_model=dict)
 def initiate_payment(
     data: PaymentInitiate,
-    current_user: User = Depends(get_current_user)
+    current_user: Users = Depends(get_current_user)
 ):
     """
     Initiate payment for a transaction
@@ -127,7 +127,7 @@ def initiate_payment(
 @router.post("/payment/confirm", response_model=dict)
 def confirm_payment(
     data: PaymentConfirm,
-    current_user: User = Depends(get_current_user)
+    current_user: Users = Depends(get_current_user)
 ):
     """
     Confirm payment completion
@@ -140,7 +140,7 @@ def confirm_payment(
 
 
 @router.get("/statistics/summary", response_model=dict)
-def get_transaction_statistics(current_user: User = Depends(get_current_user)):
+def get_transaction_statistics(current_user: Users = Depends(get_current_user)):
     """
     Get transaction statistics for current user
     """
@@ -170,7 +170,7 @@ def get_settings():
 @router.put("/settings/system", response_model=dict)
 def update_settings(
     data: SettingsCreate,
-    current_user: User = Depends(get_current_user)
+    current_user: Users = Depends(get_current_user)
 ):
     """
     Update system settings (admin only)

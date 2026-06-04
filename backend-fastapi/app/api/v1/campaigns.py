@@ -10,8 +10,8 @@ from jose import jwt
 
 from app.core.database import get_db
 from app.services.auth_svc import get_current_user
-from app.models.user import User, Organization, OrganizationMember
-from app.models.campaign import Campaign
+from app.models.users import Users, Organizations, OrganizationMembers
+from app.models.campaigns import Campaigns
 
 try:
     from app.core.security import SECRET_KEY, ALGORITHM
@@ -28,7 +28,7 @@ def get_optional_user(token: str = Depends(oauth2_scheme_optional), db: Session 
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email = payload.get("sub")
-        if email: return db.query(User).filter(User.email == email).first()
+        if email: return db.query(Users).filter(Users.email == email).first()
     except: return None
     return None
 
@@ -46,10 +46,10 @@ class CampaignApprovalAction(BaseModel):
 
 
 @router.get("/")
-def list_campaigns(request: Request, org_email: Optional[str] = None, db: Session = Depends(get_db), current_user: Optional[User] = Depends(get_optional_user)):
-    query = db.query(Campaign)
-    if org_email: query = query.filter(Campaign.org_email == org_email)
-    campaigns = query.order_by(Campaign.campaign_id.desc()).all()
+def list_campaigns(request: Request, org_email: Optional[str] = None, db: Session = Depends(get_db), current_user: Optional[Users] = Depends(get_optional_user)):
+    query = db.query(Campaigns)
+    if org_email: query = query.filter(Campaigns.org_email == org_email)
+    campaigns = query.order_by(Campaigns.campaign_id.desc()).all()
     result = []
     
     for c in campaigns:
@@ -61,8 +61,8 @@ def list_campaigns(request: Request, org_email: Optional[str] = None, db: Sessio
         elif current_user:
             if "Admin" in str(current_user.role): is_visible = True
             else:
-                membership = db.query(OrganizationMember).filter(
-                    OrganizationMember.org_email == c.org_email, OrganizationMember.mem_email == current_user.email
+                membership = db.query(OrganizationMembers).filter(
+                    OrganizationMembers.org_email == c.org_email, OrganizationMembers.mem_email == current_user.email
                 ).first()
                 if membership and any(role in str(membership.mem_permission) for role in ["Manager", "Poster"]):
                     is_visible = True
@@ -77,7 +77,7 @@ def list_campaigns(request: Request, org_email: Optional[str] = None, db: Sessio
             desc = parts[0]
             img_url = parts[1].replace("||", "")
 
-        org = db.query(Organization).filter(Organization.org_email == c.org_email).first()
+        org = db.query(Organizations).filter(Organizations.org_email == c.org_email).first()
         reason = getattr(c, 'reject_reason', getattr(c, 'rejection_reason', None))
         
         result.append({
@@ -92,15 +92,15 @@ def list_campaigns(request: Request, org_email: Optional[str] = None, db: Sessio
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
-def create_campaign(data: CampaignCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    membership = db.query(OrganizationMember).filter(OrganizationMember.org_email == data.org_email, OrganizationMember.mem_email == current_user.email).first()
+def create_campaign(data: CampaignCreate, db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
+    membership = db.query(OrganizationMembers).filter(OrganizationMembers.org_email == data.org_email, OrganizationMembers.mem_email == current_user.email).first()
     if not membership or not any(role in str(membership.mem_permission) for role in ["Manager", "Poster"]):
         raise HTTPException(status_code=403, detail="Chỉ Manager/Poster mới có quyền!")
 
     final_desc = data.description
     if data.image_url: final_desc += f"||IMG:{data.image_url}||"
 
-    new_campaign = Campaign(
+    new_campaign = Campaigns(
         org_email=data.org_email, title=data.title, description=final_desc,
         start_date=data.start_date, end_date=data.end_date,
         approval="Pending", availability="Closed"
@@ -111,12 +111,12 @@ def create_campaign(data: CampaignCreate, db: Session = Depends(get_db), current
 
 
 @router.put("/{campaign_id}")
-def update_campaign(campaign_id: int, data: CampaignCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def update_campaign(campaign_id: int, data: CampaignCreate, db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
     """Chỉnh sửa và Gửi lại chiến dịch bị Reject"""
-    campaign = db.query(Campaign).filter(Campaign.campaign_id == campaign_id).first()
+    campaign = db.query(Campaigns).filter(Campaigns.campaign_id == campaign_id).first()
     if not campaign: raise HTTPException(status_code=404, detail="Không tìm thấy")
     
-    membership = db.query(OrganizationMember).filter(OrganizationMember.org_email == campaign.org_email, OrganizationMember.mem_email == current_user.email).first()
+    membership = db.query(OrganizationMembers).filter(OrganizationMembers.org_email == campaign.org_email, OrganizationMembers.mem_email == current_user.email).first()
     if not membership or not any(role in str(membership.mem_permission) for role in ["Manager", "Poster"]):
         raise HTTPException(status_code=403, detail="Không có quyền chỉnh sửa!")
 
@@ -138,9 +138,9 @@ def update_campaign(campaign_id: int, data: CampaignCreate, db: Session = Depend
 
 
 @router.put("/{campaign_id}/approve")
-def approve_campaign(campaign_id: int, data: CampaignApprovalAction, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def approve_campaign(campaign_id: int, data: CampaignApprovalAction, db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
     if "Admin" not in str(current_user.role): raise HTTPException(status_code=403, detail="Chỉ Admin mới có quyền duyệt!")
-    campaign = db.query(Campaign).filter(Campaign.campaign_id == campaign_id).first()
+    campaign = db.query(Campaigns).filter(Campaigns.campaign_id == campaign_id).first()
     if not campaign: raise HTTPException(status_code=404, detail="Không tìm thấy")
         
     if data.action == "approve":

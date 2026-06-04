@@ -13,8 +13,8 @@ from app.core.database import get_db
 from app.services.auth_svc import get_current_user
 
 # Sử dụng Models chuẩn xác
-from app.models.user import User, Organization, OrganizationMember, Directory
-from app.models.campaign import Campaign
+from app.models.users import Users, Organizations, OrganizationMembers, Directory
+from app.models.campaigns import Campaigns
 from app.core.security import verify_password, get_password_hash
 
 router = APIRouter(prefix="/api/v1/users", tags=["Users & Organizations"])
@@ -37,7 +37,7 @@ class OrgUpdateDescription(BaseModel):
 # ==========================================
 
 @router.get("/me")
-def get_my_profile(current_user: User = Depends(get_current_user)):
+def get_my_profile(current_user: Users = Depends(get_current_user)):
     """Lấy thông tin cá nhân (Tab Account)"""
     return {
         "email": current_user.email,
@@ -49,7 +49,7 @@ def get_my_profile(current_user: User = Depends(get_current_user)):
 
 
 @router.put("/me")
-def update_my_profile(data: UserUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def update_my_profile(data: UserUpdate, db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
     """Cập nhật thông tin cá nhân (DB Thật)"""
     if data.name:
         current_user.name = data.name
@@ -82,7 +82,7 @@ def get_directory(
 @router.get("/{email}")
 def get_user_profile(email: str, db: Session = Depends(get_db)):
     """Get specific user's public profile (DB Thật)"""
-    user = db.query(User).filter(User.email == email).first()
+    user = db.query(Users).filter(Users.email == email).first()
     if not user:
         raise HTTPException(status_code=404, detail="Không tìm thấy người dùng")
         
@@ -96,7 +96,7 @@ def get_user_profile(email: str, db: Session = Depends(get_db)):
 
 
 @router.post("/change-password")
-def change_password(data: UserChangePassword, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def change_password(data: UserChangePassword, db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
     """Đổi mật khẩu (API của Team)"""
     # 1. Kiểm tra mật khẩu cũ
     if not verify_password(data.old_password, current_user.password_hash):
@@ -114,16 +114,16 @@ def change_password(data: UserChangePassword, db: Session = Depends(get_db), cur
 # ==========================================
 
 @router.get("/my-organizations")
-def get_my_organizations(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_my_organizations(db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
     """Lấy danh sách Tổ chức User đang tham gia kèm Thống kê"""
-    memberships = db.query(OrganizationMember).filter(OrganizationMember.mem_email == current_user.email).all()
+    memberships = db.query(OrganizationMembers).filter(OrganizationMembers.mem_email == current_user.email).all()
     
     org_list = []
     for mem in memberships:
-        org = db.query(Organization).filter(Organization.org_email == mem.org_email).first()
+        org = db.query(Organizations).filter(Organizations.org_email == mem.org_email).first()
         if org:
-            campaign_count = db.query(Campaign).filter(Campaign.org_email == org.org_email, Campaign.approval == "Approved").count()
-            member_count = db.query(OrganizationMember).filter(OrganizationMember.org_email == org.org_email).count()
+            campaign_count = db.query(Campaigns).filter(Campaigns.org_email == org.org_email, Campaigns.approval == "Approved").count()
+            member_count = db.query(OrganizationMembers).filter(OrganizationMembers.org_email == org.org_email).count()
             
             org_list.append({
                 "org_email": org.org_email,
@@ -137,14 +137,14 @@ def get_my_organizations(db: Session = Depends(get_db), current_user: User = Dep
 
 
 @router.post("/organizations", status_code=status.HTTP_201_CREATED)
-def create_organization(data: OrganizationCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def create_organization(data: OrganizationCreate, db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
     """Tạo Tổ chức mới (Người tạo tự động thành Manager)"""
-    existing_org = db.query(Organization).filter(Organization.org_email == data.org_email).first()
+    existing_org = db.query(Organizations).filter(Organizations.org_email == data.org_email).first()
     if existing_org:
         raise HTTPException(status_code=400, detail="Email Tổ chức này đã được sử dụng")
 
     # 1. Tạo Tổ chức
-    new_org = Organization(
+    new_org = Organizations(
         org_email=data.org_email,
         org_name=data.org_name,
         representative_email=current_user.email,
@@ -153,7 +153,7 @@ def create_organization(data: OrganizationCreate, db: Session = Depends(get_db),
     db.add(new_org)
     
     # 2. Thêm người tạo vào làm Manager
-    new_member = OrganizationMember(
+    new_member = OrganizationMembers(
         org_email=data.org_email,
         mem_email=current_user.email,
         mem_permission="Manager"
@@ -173,20 +173,20 @@ def create_organization(data: OrganizationCreate, db: Session = Depends(get_db),
 
 
 @router.get("/organizations/{org_email}")
-def get_organization_detail(org_email: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_organization_detail(org_email: str, db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
     """Xem chi tiết 1 Tổ chức & List Thành viên (Xếp Manager -> Poster -> Member)"""
-    org = db.query(Organization).filter(Organization.org_email == org_email).first()
+    org = db.query(Organizations).filter(Organizations.org_email == org_email).first()
     if not org:
         raise HTTPException(status_code=404, detail="Không tìm thấy Tổ chức")
 
-    memberships = db.query(OrganizationMember).filter(OrganizationMember.org_email == org_email).all()
+    memberships = db.query(OrganizationMembers).filter(OrganizationMembers.org_email == org_email).all()
     
     # Map ưu tiên xếp hạng
     role_priority = {"Manager": 1, "Poster": 2, "Member": 3}
     
     member_list = []
     for m in memberships:
-        user_info = db.query(User).filter(User.email == m.mem_email).first()
+        user_info = db.query(Users).filter(Users.email == m.mem_email).first()
         perm_val = m.mem_permission.value if hasattr(m.mem_permission, 'value') else str(m.mem_permission)
         member_list.append({
             "email": m.mem_email,
@@ -213,19 +213,19 @@ def update_organization_info(
     org_email: str,
     data: OrgUpdateDescription,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: Users = Depends(get_current_user)
 ):
     """Người đại diện (Manager) chỉnh sửa Description của Tổ chức"""
-    manager_check = db.query(OrganizationMember).filter(
-        OrganizationMember.org_email == org_email,
-        OrganizationMember.mem_email == current_user.email,
-        OrganizationMember.mem_permission == "Manager"
+    manager_check = db.query(OrganizationMembers).filter(
+        OrganizationMembers.org_email == org_email,
+        OrganizationMembers.mem_email == current_user.email,
+        OrganizationMembers.mem_permission == "Manager"
     ).first()
     
     if not manager_check:
         raise HTTPException(status_code=403, detail="Chỉ Manager mới có quyền chỉnh sửa thông tin Tổ chức!")
 
-    org = db.query(Organization).filter(Organization.org_email == org_email).first()
+    org = db.query(Organizations).filter(Organizations.org_email == org_email).first()
     org.description = data.description
     db.commit()
     
@@ -240,7 +240,7 @@ def get_organization_members(
     db: Session = Depends(get_db)
 ):
     """Get members of an organization (API dự phòng của Team)"""
-    memberships = db.query(OrganizationMember).filter(OrganizationMember.org_email == org_email).offset(skip).limit(limit).all()
+    memberships = db.query(OrganizationMembers).filter(OrganizationMembers.org_email == org_email).offset(skip).limit(limit).all()
     return [{
         "mem_email": m.mem_email,
         "mem_permission": m.mem_permission.value if hasattr(m.mem_permission, 'value') else str(m.mem_permission)
@@ -252,30 +252,30 @@ def add_organization_member(
     org_email: str, 
     data: MemberAddRequest, 
     db: Session = Depends(get_db), 
-    current_user: User = Depends(get_current_user)
+    current_user: Users = Depends(get_current_user)
 ):
     """Manager thêm thành viên mới"""
-    manager_check = db.query(OrganizationMember).filter(
-        OrganizationMember.org_email == org_email,
-        OrganizationMember.mem_email == current_user.email,
-        OrganizationMember.mem_permission == "Manager"
+    manager_check = db.query(OrganizationMembers).filter(
+        OrganizationMembers.org_email == org_email,
+        OrganizationMembers.mem_email == current_user.email,
+        OrganizationMembers.mem_permission == "Manager"
     ).first()
     
     if not manager_check:
         raise HTTPException(status_code=403, detail="Chỉ Manager mới có quyền thêm thành viên!")
 
-    new_user = db.query(User).filter(User.email == data.user_email).first()
+    new_user = db.query(Users).filter(Users.email == data.user_email).first()
     if not new_user:
         raise HTTPException(status_code=404, detail="Email người dùng không tồn tại!")
         
-    existing_mem = db.query(OrganizationMember).filter(
-        OrganizationMember.org_email == org_email, 
-        OrganizationMember.mem_email == data.user_email
+    existing_mem = db.query(OrganizationMembers).filter(
+        OrganizationMembers.org_email == org_email, 
+        OrganizationMembers.mem_email == data.user_email
     ).first()
     if existing_mem:
         raise HTTPException(status_code=400, detail="Người này đã ở trong Tổ chức!")
 
-    new_member = OrganizationMember(
+    new_member = OrganizationMembers(
         org_email=org_email,
         mem_email=data.user_email,
         mem_permission="Member"
@@ -292,15 +292,15 @@ def update_member_role(
     mem_email: str, 
     data: MemberRoleUpdate, 
     db: Session = Depends(get_db), 
-    current_user: User = Depends(get_current_user)
+    current_user: Users = Depends(get_current_user)
 ):
     """Manager cấp quyền Poster hoặc Chuyển giao quyền Manager"""
-    org = db.query(Organization).filter(Organization.org_email == org_email).first()
-    target_member = db.query(OrganizationMember).filter(
-        OrganizationMember.org_email == org_email, OrganizationMember.mem_email == mem_email
+    org = db.query(Organizations).filter(Organizations.org_email == org_email).first()
+    target_member = db.query(OrganizationMembers).filter(
+        OrganizationMembers.org_email == org_email, OrganizationMembers.mem_email == mem_email
     ).first()
-    current_manager = db.query(OrganizationMember).filter(
-        OrganizationMember.org_email == org_email, OrganizationMember.mem_email == current_user.email
+    current_manager = db.query(OrganizationMembers).filter(
+        OrganizationMembers.org_email == org_email, OrganizationMembers.mem_email == current_user.email
     ).first()
 
     if not org or not target_member or not current_manager:

@@ -11,7 +11,7 @@ from jose import jwt, JWTError
 from app.core.database import get_db
 from app.core.security import verify_password, get_password_hash, create_access_token
 from app.services.auth_svc import get_current_user
-from app.models.user import User, Directory
+from app.models.users import Users, Directory
 
 # Import Schemas từ team cho các endpoint mới
 from app.schemas.user_schema import UserOTPVerify, RefreshTokenRequest, TokenResponse, UserLogin
@@ -66,7 +66,7 @@ def register_user(data: UserRegister, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Mật khẩu xác nhận không khớp!")
 
     # 2. Kiểm tra Email đã tồn tại trong Hệ thống (Users) chưa
-    existing_user = db.query(User).filter(User.email == data.user_email).first()
+    existing_user = db.query(Users).filter(Users.email == data.user_email).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="Email này đã được đăng ký!")
         
@@ -79,7 +79,7 @@ def register_user(data: UserRegister, db: Session = Depends(get_db)):
         )
 
     # 4. Tạo tài khoản mới
-    new_user = User(
+    new_user = Users(
         email=data.user_email,
         name=data.user_name,
         password_hash=get_password_hash(data.password),
@@ -96,7 +96,7 @@ def register_user(data: UserRegister, db: Session = Depends(get_db)):
 @router.post("/login")
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """Đăng nhập lấy JWT Token (Sử dụng OAuth2 Form cho Frontend và Swagger)"""
-    user = db.query(User).filter(User.email == form_data.username).first()
+    user = db.query(Users).filter(Users.email == form_data.username).first()
     
     if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(
@@ -121,7 +121,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 def change_password(
     data: ChangePasswordRequest, 
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: Users = Depends(get_current_user)
 ):
     """Đổi mật khẩu trong Tab Profile"""
     if not verify_password(data.old_password, current_user.password_hash):
@@ -139,7 +139,7 @@ def change_password(
 @router.post("/forgot-password")
 def forgot_password(data: ForgotPasswordRequest, db: Session = Depends(get_db)):
     """Yêu cầu cấp lại mật khẩu (Gửi Token)"""
-    user = db.query(User).filter(User.email == data.user_email).first()
+    user = db.query(Users).filter(Users.email == data.user_email).first()
     if not user:
         return {"message": "Nếu email tồn tại, hệ thống đã gửi link khôi phục."}
         
@@ -165,7 +165,7 @@ def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_db)):
     except JWTError:
         raise HTTPException(status_code=400, detail="Token đã hết hạn hoặc không hợp lệ!")
         
-    user = db.query(User).filter(User.email == email).first()
+    user = db.query(Users).filter(Users.email == email).first()
     if not user:
         raise HTTPException(status_code=404, detail="Không tìm thấy người dùng!")
         
@@ -226,7 +226,7 @@ def logout():
 @router.post("/organization-login")
 def organization_login(credentials: UserLogin, db: Session = Depends(get_db)):
     """Đăng nhập đặc biệt dành cho Tổ chức (Tương tự login thường)"""
-    user = db.query(User).filter(User.email == credentials.email).first()
+    user = db.query(Users).filter(Users.email == credentials.email).first()
     
     if not user or not verify_password(credentials.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Email hoặc mật khẩu không chính xác")

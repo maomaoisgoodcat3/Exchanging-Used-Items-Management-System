@@ -9,9 +9,9 @@ from app.core.database import get_db
 from app.services.auth_svc import get_current_user
 
 # Sử dụng chuẩn tên Model mới nhất của chúng ta
-from app.models.user import User, RoleEnum
-from app.models.post import Post
-from app.models.campaign import Campaign
+from app.models.users import User, RoleEnum
+from app.models.posts import Post
+from app.models.campaigns import Campaign
 
 from app.schemas.post_schema import PostApprovalAction
 from app.schemas.campaign_schema import CampaignApprovalAction
