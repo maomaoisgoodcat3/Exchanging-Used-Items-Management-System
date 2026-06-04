@@ -117,7 +117,7 @@ def get_pending_campaigns(
     """
     Lấy danh sách các chiến dịch đang chờ duyệt (KẾT NỐI DB THẬT)
     """
-    campaigns = db.query(Campaign).filter(Campaign.approval_status == "Pending").offset(skip).limit(limit).all()
+    campaigns = db.query(Campaigns).filter(Campaigns.approval_status == "Pending").offset(skip).limit(limit).all()
     result = []
     for c in campaigns:
         result.append({
@@ -140,7 +140,7 @@ def approve_campaign_admin(
     """
     Duyệt hoặc từ chối chiến dịch (KẾT NỐI DB THẬT)
     """
-    campaign = db.query(Campaign).filter(Campaign.campaign_id == campaign_id).first()
+    campaign = db.query(Campaigns).filter(Campaigns.campaign_id == campaign_id).first()
     if not campaign:
         raise HTTPException(status_code=404, detail="Không tìm thấy chiến dịch")
 
