@@ -102,7 +102,7 @@ class OrganizationRead(OrganizationBase):
 class OrganizationMemberBase(BaseModel):
     org_email: EmailStr
     mem_email: EmailStr
-    mem_permission: str = Field(default="Member", pattern="^(Member Manager|Poster|Member)$")
+    mem_permission: str = Field(default="Member", pattern="^(Manager|Poster|Member)$")
 
 
 class OrganizationMemberCreate(OrganizationMemberBase):
@@ -110,7 +110,7 @@ class OrganizationMemberCreate(OrganizationMemberBase):
 
 
 class OrganizationMemberUpdate(BaseModel):
-    mem_permission: str = Field(pattern="^(Member Manager|Poster|Member)$")
+    mem_permission: str = Field(pattern="^(Manager|Poster|Member)$")
 
 
 class OrganizationMemberRead(OrganizationMemberBase):
@@ -125,9 +125,3 @@ class PasswordResetRequest(BaseModel):
 class PasswordReset(BaseModel):
     token: str
     new_password: str = Field(..., min_length=6)
-
-class UserResponse:
-    pass
-
-class Token:
-    pass

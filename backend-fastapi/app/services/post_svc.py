@@ -134,6 +134,19 @@ class PostService:
         return True
 
     @staticmethod
+    def should_hide_price(post_category: str) -> bool:
+        """
+        Determine if prices should be hidden for a post category.
+
+        Args:
+            post_category: Post category
+
+        Returns:
+            True if prices should be hidden (Trading), False otherwise
+        """
+        return post_category == PostCategory.TRADING.value
+
+    @staticmethod
     def validate_images(images: Optional[List[Dict]]) -> bool:
         """
         Validate image data.
@@ -160,7 +173,7 @@ class PostService:
         return True
 
     @staticmethod
-    def handle_approval_action(current_status: str, action: str, reject_reason: Optional[str] = None) -> tuple[Optional[str], bool, Optional[str]]:
+    def handle_approval_action(current_status: str, action: str, reject_reason: Optional[str] = None) -> tuple:
         """
         Handle approval action and determine new status.
 
@@ -185,7 +198,7 @@ class PostService:
         elif action == "resend":
             return ApprovalStatus.RESENDING.value, True, None
 
-        return None, False, "Unhandled approval action"
+        return None, False, f"Unhandled action: {action}"
 
     @staticmethod
     def can_mark_as_sold(current_status: str) -> bool:

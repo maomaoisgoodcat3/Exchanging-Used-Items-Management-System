@@ -1,219 +1,155 @@
 """Campaign Management API Endpoints"""
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends, Request
+from fastapi.security import OAuth2PasswordBearer
 from typing import Optional, List
-from decimal import Decimal
-from app.schemas.campaign_schema import (
-    CampaignCreate, CampaignUpdate, CampaignRead, CampaignDetailRead,
-    CampaignListRead, CampaignFilter, CampaignApprovalAction
-)
+from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from datetime import datetime
+import os
+from jose import jwt
+
+from app.core.database import get_db
+from app.services.auth_svc import get_current_user
+# Đã sửa AccountUser thành User cho khớp với DB hiện tại
+from app.models.users import Users, Organizations, OrganizationMembers
+from app.models.campaigns import Campaigns
+
+try:
+    from app.core.security import SECRET_KEY, ALGORITHM # type: ignore
+except ImportError:
+    SECRET_KEY = os.getenv("SECRET_KEY", "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63")
+    ALGORITHM = os.getenv("ALGORITHM", "HS256")
 
 router = APIRouter(prefix="/api/v1/campaigns", tags=["Campaigns"])
 
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
+def get_optional_user(token: str = Depends(oauth2_scheme_optional), db: Session = Depends(get_db)):
+    if not token: return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email = payload.get("sub")
+        if email: return db.query(Users).filter(Users.email == email).first()
+    except: return None
+    return None
 
-@router.get("/", response_model=CampaignListRead)
-def list_campaigns(
-    search: Optional[str] = None,
-    status: Optional[str] = None,
-    sort_by: str = "created_at",
-    sort_order: str = "desc",
-    limit: int = 20,
-    skip: int = 0
-):
-    """
-    List all campaigns with filtering
+class CampaignCreate(BaseModel):
+    org_email: str
+    title: str
+    description: str
+    start_date: datetime
+    end_date: datetime
+    image_url: Optional[str] = None 
+
+class CampaignApprovalAction(BaseModel):
+    action: str 
+    reject_reason: Optional[str] = None
+
+@router.get("/")
+def list_campaigns(request: Request, org_email: Optional[str] = None, db: Session = Depends(get_db), current_user: Optional[Users] = Depends(get_optional_user)):
+    query = db.query(Campaign)
+    if org_email: query = query.filter(Campaign.org_email == org_email)
+    campaigns = query.order_by(Campaign.campaign_id.desc()).all()
+    result = []
     
-    Database: Campaigns table
-    - Filters by status (Pending, Approved, Rejected)
-    - Searches in title and description
-    - status options: Pending, Approved, Rejected
+    for c in campaigns:
+        is_visible = False
+        approval_val = c.approval.value if hasattr(c.approval, 'value') else str(c.approval)
+        
+        # LOGIC BẢO MẬT HIỂN THỊ
+        if "Approved" in approval_val: is_visible = True
+        elif current_user:
+            if "Admin" in str(current_user.role): is_visible = True
+            else:
+                membership = db.query(OrganizationMembers).filter(
+                    OrganizationMembers.org_email == c.org_email, OrganizationMembers.mem_email == current_user.email
+                ).first()
+                if membership and any(role in str(membership.mem_permission) for role in ["Manager", "Poster"]):
+                    is_visible = True
+                    
+        if not is_visible: continue
+
+        # Tách Link ảnh ra khỏi Description
+        desc = c.description or ""
+        img_url = None
+        if "||IMG:" in desc:
+            parts = desc.split("||IMG:")
+            desc = parts[0]
+            img_url = parts[1].replace("||", "")
+
+        org = db.query(Organizations).filter(Organizations.org_email == c.org_email).first()
+        reason = getattr(c, 'reject_reason', getattr(c, 'rejection_reason', None))
+        
+        result.append({
+            "campaign_id": c.campaign_id, "org_email": c.org_email, "org_name": org.org_name if org else "Unknown",
+            "title": c.title, "description": desc,
+            "start_date": c.start_date.isoformat() if c.start_date is not None else None,
+            "end_date": c.end_date.isoformat() if hasattr(c, 'end_date') and c.end_date is not None else None,
+            "approval": approval_val, "availability": getattr(c, 'availability', 'Closed'),
+            "thumbnail_url": img_url, "reject_reason": reason
+        })
+    return result
+
+@router.post("/", status_code=status.HTTP_201_CREATED)
+def create_campaign(data: CampaignCreate, db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
+    membership = db.query(OrganizationMembers).filter(OrganizationMembers.org_email == data.org_email, OrganizationMembers.mem_email == current_user.email).first()
+    if not membership or not any(role in str(membership.mem_permission) for role in ["Manager", "Poster"]):
+        raise HTTPException(status_code=403, detail="Chỉ Manager/Poster mới có quyền!")
+
+    final_desc = data.description
+    if data.image_url: final_desc += f"||IMG:{data.image_url}||"
+
+    new_campaign = Campaign(
+        org_email=data.org_email, title=data.title, description=final_desc,
+        start_date=data.start_date, end_date=data.end_date,
+        approval="Pending", availability="Closed"
+    )
+    db.add(new_campaign)
+    db.commit()
+    return {"message": "Đã tạo Chiến dịch, chờ duyệt!", "campaign_id": new_campaign.campaign_id}
+
+@router.put("/{campaign_id}")
+def update_campaign(campaign_id: int, data: CampaignCreate, db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
+    """Chỉnh sửa và Gửi lại chiến dịch bị Reject"""
+    campaign = db.query(Campaign).filter(Campaign.campaign_id == campaign_id).first()
+    if not campaign: raise HTTPException(status_code=404, detail="Không tìm thấy")
     
-    - **search**: Search by title or description
-    - **status**: Filter by status
-    - **sort_by**: created_at, title
-    - **sort_order**: asc, desc
-    """
-    return {
-        "data": [
-            {
-                "campaign_id": 1,
-                "title": "Summer Donation Campaign",
-                "status": "Approved",
-                "start_date": "2024-06-01T00:00:00",
-                "end_date": "2024-08-31T23:59:59",
-                "org_email": "org@uet.edu.vn"
-            }
-        ],
-        "total": 50,
-        "limit": limit,
-        "skip": skip
-    }
+    membership = db.query(OrganizationMembers).filter(OrganizationMembers.org_email == campaign.org_email, OrganizationMembers.mem_email == current_user.email).first()
+    if not membership or not any(role in str(membership.mem_permission) for role in ["Manager", "Poster"]):
+        raise HTTPException(status_code=403, detail="Không có quyền chỉnh sửa!")
 
+    final_desc = data.description
+    if data.image_url: final_desc += f"||IMG:{data.image_url}||"
 
-@router.post("/", response_model=dict, status_code=status.HTTP_201_CREATED)
-def create_campaign(
-    data: CampaignCreate,
-    current_user: str = Depends()
-):
-    """
-    Create a new campaign (organization representative only)
+    campaign.title = data.title # type: ignore
+    campaign.description = final_desc # type: ignore
+    campaign.start_date = data.start_date # type: ignore
+    campaign.end_date = data.end_date # type: ignore
     
-    Database: Campaigns table
-    - **org_email**: Organization email (from current user's organization)
-    - **title**: Campaign title
-    - **description**: Campaign description
-    - **start_date**: Campaign start date
-    - **end_date**: Campaign end date
-    - **status**: Default 'Pending' - needs admin approval
-    """
-    if not data.title or not data.description:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Title and description are required"
-        )
-    
-    return {
-        "message": "Campaign created successfully",
-        "campaign_id": 1,
-        "status": "Pending",
-        "created_at": "2024-05-31T15:39:31"
-    }
+    # Logic: Bị Reject mà sửa lại thì tự thành Resending
+    approval_val = campaign.approval.value if hasattr(campaign.approval, 'value') else str(campaign.approval)
+    if "Rejected" in approval_val:
+        campaign.approval = "Resending" # type: ignore
+        
+    db.commit()
+    return {"message": "Đã cập nhật và Gửi lại cho Admin!"}
 
-
-@router.get("/{campaign_id}", response_model=CampaignDetailRead)
-def get_campaign_detail(campaign_id: int):
-    """
-    Get detailed information of a specific campaign
-    
-    Database: Campaigns table
-    - Retrieves campaign by campaign_id
-    - **campaign_id**: Campaign ID
-    """
-    return {
-        "campaign_id": campaign_id,
-        "title": "Summer Donation Campaign",
-        "description": "Help students and families in need",
-        "status": "Approved",
-        "start_date": "2024-06-01T00:00:00",
-        "end_date": "2024-08-31T23:59:59",
-        "org_email": "org@uet.edu.vn",
-        "created_at": "2024-05-01T00:00:00"
-    }
-
-
-@router.put("/{campaign_id}", response_model=dict)
-def update_campaign(
-    campaign_id: int,
-    data: CampaignCreate,
-    current_user: str = Depends()
-):
-    """
-    Update campaign information (creator or admin only)
-    
-    Database: Campaigns table
-    - Can only update if status is Pending
-    
-    - **campaign_id**: Campaign ID
-    """
-    return {
-        "message": "Campaign updated successfully",
-        "campaign_id": campaign_id
-    }
-
-
-@router.delete("/{campaign_id}", response_model=dict)
-def delete_campaign(
-    campaign_id: int,
-    current_user: str = Depends()
-):
-    """
-    Delete a campaign (creator or admin only)
-    
-    Database: Campaigns table
-    - Deletes campaign and cascades to Posts
-    
-    - **campaign_id**: Campaign ID
-    """
-    return {
-        "message": "Campaign deleted successfully",
-        "campaign_id": campaign_id
-    }
-
-
-@router.post("/{campaign_id}/approve", response_model=dict)
-def approve_campaign(
-    campaign_id: int,
-    data: CampaignApprovalAction,
-    current_user: str = Depends()
-):
-    """
-    Approve/Reject campaign (admin only)
-    
-    Database: Campaigns table
-    - Updates status to Approved or Rejected
-    - Sets reviewed_by and reviewed_at
-    - Sets reject_reason if rejected
-    """
-    return {
-        "message": f"Campaign {data.action}",
-        "campaign_id": campaign_id,
-        "status": data.action
-    }
-
-
-@router.get("/{campaign_id}/posts", response_model=List[dict])
-def get_campaign_posts(
-    campaign_id: int,
-    limit: int = 20,
-    skip: int = 0
-):
-    """
-    Get all posts associated with a campaign
-    
-    Database: Posts table
-    - Retrieves posts where campaign_id matches
-    - Filters posts by campaign_id
-    """
-    return [
-        {
-            "post_id": 1,
-            "title": "Used Books Donation",
-            "status": "Approved",
-            "seller_email": "user@uet.edu.vn",
-            "created_at": "2024-05-31T15:39:31"
-        }
-    ]
-
-
-@router.post("/{campaign_id}/end", response_model=dict)
-def end_campaign(
-    campaign_id: int,
-    current_user: str = Depends()
-):
-    """
-    End a campaign (creator or admin only)
-    
-    Database: Campaigns table
-    - Updates status to reflect campaign ended
-    """
-    return {
-        "message": "Campaign ended",
-        "campaign_id": campaign_id,
-        "status": "Ended"
-    }
-
-
-@router.get("/{campaign_id}/statistics", response_model=dict)
-def get_campaign_statistics(campaign_id: int):
-    """
-    Get campaign statistics
-    
-    Database: Posts table joined with Campaigns
-    - Counts posts by status
-    - Calculates total items and value
-    """
-    return {
-        "total_posts": 25,
-        "approved_posts": 20,
-        "pending_posts": 3,
-        "rejected_posts": 2
-    }
+@router.put("/{campaign_id}/approve")
+def approve_campaign(campaign_id: int, data: CampaignApprovalAction, db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
+    if "Admin" not in str(current_user.role): raise HTTPException(status_code=403, detail="Chỉ Admin mới có quyền duyệt!")
+    campaign = db.query(Campaign).filter(Campaign.campaign_id == campaign_id).first()
+    if not campaign: raise HTTPException(status_code=404, detail="Không tìm thấy")
+        
+    if data.action == "approve":
+        campaign.approval = "Approved" # type: ignore
+        campaign.availability = "Open" # type: ignore
+        if hasattr(campaign, 'rejection_reason'): campaign.rejection_reason = None
+        if hasattr(campaign, 'reject_reason'): campaign.reject_reason = None # type: ignore
+    elif data.action == "reject":
+        campaign.approval = "Rejected" # type: ignore
+        campaign.availability = "Closed" # type: ignore
+        if hasattr(campaign, 'rejection_reason'): campaign.rejection_reason = data.reject_reason
+        if hasattr(campaign, 'reject_reason'): campaign.reject_reason = data.reject_reason # type: ignore
+        
+    campaign.reviewed_by = current_user.email
+    db.commit()
+    return {"message": "Thành công!", "status": campaign.approval}

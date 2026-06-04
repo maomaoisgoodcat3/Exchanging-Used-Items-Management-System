@@ -1,12 +1,16 @@
 from typing import cast
 from sqlalchemy.orm import Session
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, Depends
+from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError, jwt
 from app.models.users import Users, Directory
 from app.schemas.user_schema import UserCreate
 from app.core.security import get_password_hash, verify_password
+from app.core.config import settings
+from app.core.database import get_db
 
 def create_user(db: Session, user_in: UserCreate):
-    # 1. Kiểm tra xem email có tồn tại trong danh sách nội bộ của trường không
+    # 1. Kiểm tra danh sách nhà trường
     directory_record = db.query(Directory).filter(Directory.school_email == user_in.email).first()
     if not directory_record:
         raise HTTPException(
@@ -14,7 +18,7 @@ def create_user(db: Session, user_in: UserCreate):
             detail="Email không thuộc danh sách nhà trường. Đăng ký bị từ chối."
         )
 
-    # 2. Kiểm tra xem email này đã từng tạo tài khoản trên App chưa
+    # 2. Kiểm tra trùng lặp
     existing_user = db.query(Users).filter(Users.email == user_in.email).first()
     if existing_user:
         raise HTTPException(
@@ -22,10 +26,10 @@ def create_user(db: Session, user_in: UserCreate):
             detail="Email này đã được đăng ký tài khoản."
         )
 
-    # 3. Tạo tài khoản mới (Nhớ băm mật khẩu ra trước khi lưu)
+    # 3. Tạo user mới
     db_user = Users(
-        user_email=user_in.email,
-        user_name=user_in.name,
+        email=user_in.email,
+        name=user_in.name,
         password_hash=get_password_hash(user_in.password),
         phone=user_in.phone
     )
@@ -35,16 +39,33 @@ def create_user(db: Session, user_in: UserCreate):
     return db_user
 
 def authenticate_user(db: Session, email: str, password: str):
-    # 1. Tìm user theo email
     user = db.query(Users).filter(Users.email == email).first()
     if not user:
         return False
-    
-    # 2. Lấy mật khẩu người dùng nhập vào, đối chiếu với mã hash trong DB
     if not verify_password(password, cast(str, user.password_hash)):
         return False
-        
     return user
 
-def get_current_user(db: Session, email: str):
-    return db.query(Users).filter(Users.email == email).first()
+# --- PHẦN BỊ THIẾU: HÀM GIẢI MÃ TOKEN ---
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")
+
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        # Giải mã JWT để lấy email
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        email: str | None = payload.get("sub")
+        if email is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+        
+    # Tìm user trong Database
+    user = db.query(Users).filter(Users.email == email).first()
+    if user is None:
+        raise credentials_exception
+    return user
