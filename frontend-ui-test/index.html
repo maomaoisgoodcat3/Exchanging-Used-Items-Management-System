@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>UET Marketplace</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="top-navbar">
+        <div class="logo">UET Market</div>
+        
+        <div class="center-toolbar">
+            <input type="text" id="searchInput" placeholder="🔍 Tìm kiếm..." disabled title="Tính năng đang cập nhật">
+            <button class="btn btn-outline" disabled>✖ Lọc</button>
+        </div>
+
+        <div class="nav-actions">
+            <button id="btnOpenAuth" class="btn btn-primary" onclick="openModal('authModal')">Đăng Nhập / Đăng Ký</button>
+            <button id="btnProfile" class="btn btn-outline hidden" onclick="openModal('profileModal')">👤 Tài khoản</button>
+        </div>
+    </header>
+
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div class="sidebar-menu">
+                <button class="side-btn active" onclick="switchMainTab('tab-posts')">🛒 Chợ chung (Posts)</button>
+                <button class="side-btn" onclick="switchMainTab('tab-myposts')">📦 Bài của tôi (My Posts)</button>
+                <button class="side-btn" onclick="switchMainTab('tab-storage')">🗄️ Kho đồ (My Storage)</button>
+                <button class="side-btn" onclick="switchMainTab('tab-campaigns')">🚩 Chiến dịch (Campaigns)</button>
+                <button class="side-btn" onclick="switchMainTab('tab-orders')">🛍️ Đơn hàng (My Orders)</button>
+                <button class="side-btn" onclick="switchMainTab('tab-notifications')">🔔 Thông báo</button>
+            </div>
+        </aside>
+        
+        <main class="main-content">
+            <div id="tab-posts" class="main-tab-content active">
+                <h2>Chợ chung <span style="font-size:14px; font-weight:normal; color:gray;">(Đang phát triển bởi team viên khác)</span></h2>
+            </div>
+            <div id="tab-myposts" class="main-tab-content hidden"><h2>Bài của tôi (WIP)</h2></div>
+            <div id="tab-storage" class="main-tab-content hidden"><h2>Kho đồ (WIP)</h2></div>
+            
+            <div id="tab-campaigns" class="main-tab-content hidden">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2 style="margin: 0;">🚩 Chiến dịch từ Tổ chức <span id="activeCampFilterText" class="filter-badge hidden"></span></h2>
+                    <button id="btnOpenCreateCampaign" class="btn btn-warning hidden" onclick="openModal('campaignModal')">+ Tạo Chiến dịch mới</button>
+                </div>
+                <div class="grid-list" id="globalCampaignsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px;">
+                    <p class="empty-text">Đang tải dữ liệu chiến dịch...</p>
+                </div>
+            </div>
+            
+            <div id="tab-orders" class="main-tab-content hidden"><h2>Đơn hàng của tôi (WIP)</h2></div>
+            <div id="tab-notifications" class="main-tab-content hidden"><h2>Thông báo (WIP)</h2></div>
+        </main>
+    </div>
+
+    <div id="campaignModal" class="modal-overlay">
+        <div class="modal-content" style="width: 550px;">
+            <span class="close-btn" onclick="closeModal('campaignModal')">&times;</span>
+            <div class="modal-header">
+                <h3 id="campModalTitle">Khởi Tạo Chiến Dịch</h3>
+            </div>
+            <div class="modal-body">
+                <!-- Chứa ID ẩn để phân biệt Tạo mới hay Chỉnh sửa -->
+                <input type="hidden" id="campEditId" value="">
+                
+                <label style="font-size: 13px; font-weight: bold; color: gray;">Đại diện cho Tổ chức <span style="color:red">*</span></label>
+                <select id="campOrgEmail" class="mb-10" style="padding:8px; border-radius:6px; border:1px solid #ccc; width:100%;">
+                    <option value="">-- Chọn Tổ chức của bạn --</option>
+                </select>
+
+                <label style="font-size: 13px; font-weight: bold; color: gray;">Tên Chiến Dịch <span style="color:red">*</span></label>
+                <input type="text" id="campTitle" class="mb-10" placeholder="VD: Quyên góp áo ấm..." style="padding:8px; border-radius:6px; border:1px solid #ccc; width:100%;">
+                
+                <label style="font-size: 13px; font-weight: bold; color: gray;">Mô tả chi tiết <span style="color:red">*</span></label>
+                <textarea id="campDesc" class="mb-10" rows="3" placeholder="Mục đích..." style="padding:8px; border-radius:6px; border:1px solid #ccc; width:100%;"></textarea>
+                
+                <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                    <div style="flex: 1;"><label style="font-size: 13px; color: gray;">Bắt đầu</label><input type="datetime-local" id="campStart" style="padding:8px; border-radius:6px; border:1px solid #ccc; width:100%;"></div>
+                    <div style="flex: 1;"><label style="font-size: 13px; color: gray;">Kết thúc</label><input type="datetime-local" id="campEnd" style="padding:8px; border-radius:6px; border:1px solid #ccc; width:100%;"></div>
+                </div>
+
+                <label style="font-size: 13px; font-weight: bold; color: gray;">Hình ảnh minh họa (Chọn từ máy)</label>
+                <input type="file" id="campImageFile" accept="image/*" class="mb-10" style="border: none; padding: 0; width:100%;">
+                
+                <!-- Lưu URL ảnh cũ nếu không chọn file mới -->
+                <input type="hidden" id="campExistingImage" value="">
+                
+                <div id="imgPreview" class="hidden mb-10" style="text-align: center; background: #f8f9fa; padding: 10px; border-radius: 6px;">
+                    <img id="previewImgTag" src="" style="max-width: 100%; max-height: 150px; border-radius: 4px;">
+                </div>
+                <div id="campMsg" class="msg"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary w-100" id="btnSubmitCamp" onclick="handleSubmitCampaign()">Gửi Yêu Cầu Duyệt</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="profileModal" class="modal-overlay">
+        <div class="modal-content profile-layout">
+            <span class="close-btn" onclick="closeModal('profileModal')">&times;</span>
+            <div class="profile-sidebar">
+                <div>
+                    <button class="prof-tab-btn active" onclick="switchProfileTab('prof-info')">👤 Thông tin cá nhân</button>
+                    <button class="prof-tab-btn" onclick="switchProfileTab('prof-password')">🔒 Đổi mật khẩu</button>
+                    <button class="prof-tab-btn" onclick="switchProfileTab('prof-organizations')">🏛️ Tổ chức (Orgs)</button>
+                </div>
+                <div style="padding: 0 20px;"><button class="btn btn-danger w-100" onclick="handleLogout()">Đăng Xuất</button></div>
+            </div>
+            
+            <div class="profile-body">
+                <div id="prof-info" class="prof-content active">
+                    <h2 style="margin-top:0;">Hồ sơ cá nhân</h2>
+                    <div style="max-width: 400px;">
+                        <label style="font-size: 13px; font-weight: bold; color: gray;">Email</label>
+                        <input type="email" id="profEmail" class="mb-10" disabled style="background: #f0f0f0;">
+                        <label style="font-size: 13px; font-weight: bold; color: gray;">Họ và tên</label>
+                        <input type="text" id="profName" class="mb-10" placeholder="Nhập họ tên...">
+                        <label style="font-size: 13px; font-weight: bold; color: gray;">Số điện thoại</label>
+                        <input type="text" id="profPhone" class="mb-10" placeholder="Nhập SĐT...">
+                        <button class="btn btn-primary mt-10" onclick="updateProfile()">Lưu thay đổi</button>
+                        <div id="profMsg" class="msg mt-10"></div>
+                    </div>
+                </div>
+
+                <div id="prof-password" class="prof-content">
+                    <h2 style="margin-top:0;">Đổi mật khẩu</h2>
+                    <div style="max-width: 400px;">
+                        <input type="password" id="oldPass" class="mb-10" placeholder="Mật khẩu cũ">
+                        <input type="password" id="newPass" class="mb-10" placeholder="Mật khẩu mới">
+                        <input type="password" id="verifyNewPass" class="mb-10" placeholder="Xác nhận mật khẩu mới">
+                        <button class="btn btn-warning mt-10" onclick="changePassword()">Cập nhật mật khẩu</button>
+                        <div id="pwdMsg" class="msg mt-10"></div>
+                    </div>
+                </div>
+
+                <div id="prof-organizations" class="prof-content">
+                    <div id="orgListView">
+                        <h2 style="margin-top:0;">Các tổ chức của bạn</h2>
+                        <div id="myOrgList" class="org-grid"><p class="empty-text">Đang tải...</p></div>
+                    </div>
+                    
+                    <div id="orgDetailView" class="hidden">
+                        <div style="display:flex; justify-content: space-between; align-items:center; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px;">
+                            <button class="btn btn-outline" onclick="backToOrgList()">⬅ Quay lại</button>
+                            <button class="btn btn-primary" onclick="viewOrgCampaigns()">Xem Chiến dịch</button>
+                        </div>
+                        
+                        <h2 id="detailOrgName" style="margin-top: 0; color: #0d6efd;">Tên Tổ chức</h2>
+                        
+                        <div id="descContainer" class="mb-10">
+                            <p id="detailOrgDesc" style="color: #666; font-size: 14px; margin-bottom: 5px; line-height: 1.5;"></p>
+                            <button id="btnEditDesc" class="btn btn-outline hidden" style="font-size: 12px; padding: 4px 8px;" onclick="toggleEditDesc()">✏️ Chỉnh sửa mô tả</button>
+                        </div>
+
+                        <div id="editDescForm" class="hidden mb-10 p-10 bg-light rounded" style="border: 1px solid #ccc;">
+                            <textarea id="editDescInput" rows="3" placeholder="Nhập mô tả cho Tổ chức của bạn..."></textarea>
+                            <div style="margin-top: 5px; display: flex; gap: 5px;">
+                                <button class="btn btn-primary" onclick="saveOrgDescription()">Lưu thay đổi</button>
+                                <button class="btn btn-outline" onclick="toggleEditDesc()">Hủy</button>
+                            </div>
+                        </div>
+                        <div id="managerTools" class="hidden mb-10 p-10 bg-light rounded" style="border-left: 4px solid #ffc107;">
+                            <h4 style="margin: 0 0 10px 0;">Thêm thành viên (Quyền Manager)</h4>
+                            <div style="display: flex; gap: 10px;">
+                                <input type="email" id="newMemEmail" placeholder="Nhập Email sinh viên cần thêm..." style="flex: 1;">
+                                <button class="btn btn-warning" onclick="addOrgMember()">+ Thêm</button>
+                            </div>
+                        </div>
+
+                        <h4 style="margin-bottom: 10px;">Thành viên Tổ chức</h4>
+                        <div id="orgMemberList" class="member-list-box"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="authModal" class="modal-overlay">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('authModal')">&times;</span>
+            <div class="modal-header">
+                <h3 id="authTitle">Đăng Nhập</h3>
+            </div>
+            <div class="modal-body">
+                <input type="email" id="authEmail" placeholder="Email (Bắt buộc)">
+                <input type="text" id="authName" class="hidden" placeholder="Họ và tên">
+                <input type="text" id="authPhone" class="hidden" placeholder="Số điện thoại">
+                <input type="text" id="authResetToken" class="hidden" placeholder="Dán mã khôi phục (Token) vào đây...">
+                
+                <input type="password" id="authPass" placeholder="Mật khẩu...">
+                <input type="password" id="authVerifyPass" class="hidden" placeholder="Xác nhận mật khẩu...">
+                <div id="authMsg" class="msg"></div>
+            </div>
+            <div class="modal-footer" style="display: flex; flex-direction: column; gap: 10px;">
+                <button class="btn btn-primary w-100" id="btnSubmitAuth" onclick="handleAuth()">Xác Nhận</button>
+                <div style="display: flex; justify-content: space-between; margin-top: 5px;">
+                    <a href="#" onclick="switchAuthMode('register')" id="authToggleHint" style="font-size: 13px; color: #0d6efd; text-decoration: none; font-weight: bold;">Tạo tài khoản mới</a>
+                    <a href="#" onclick="switchAuthMode('forgot')" id="authForgotHint" style="font-size: 13px; color: #dc3545; text-decoration: none;">Quên mật khẩu?</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

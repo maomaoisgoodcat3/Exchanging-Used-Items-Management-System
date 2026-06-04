@@ -1,0 +1,1 @@
+export default function CampaignsPage() { return <div>Campaigns Tab</div>; }
