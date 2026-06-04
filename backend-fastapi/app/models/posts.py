@@ -57,6 +57,7 @@ class Posts(Base):
     r_posts_postimages = relationship("PostImages", back_populates="r_postimages_posts", cascade="all, delete-orphan")
 
 class PostProducts(Base):
+    __tablename__ = "postproducts"
     post_id = Column(Integer, ForeignKey('Posts.post_id'), primary_key=True)
     product_id = Column(Integer, ForeignKey('Storage.product_id'), primary_key=True)
     product_quantity = Column(Integer, nullable=False)

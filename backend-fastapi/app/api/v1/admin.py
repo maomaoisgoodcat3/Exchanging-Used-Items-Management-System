@@ -8,7 +8,7 @@ from datetime import datetime
 from app.core.database import get_db
 from app.services.auth_svc import get_current_user
 from app.models.users import Users, RoleEnum
-from app.models.posts import Posts
+from app.models.posts import Post
 from app.models.campaigns import Campaigns
 from app.schemas.post_schema import PostApprovalAction
 from app.schemas.campaign_schema import CampaignApprovalAction
@@ -20,7 +20,7 @@ router = APIRouter(prefix="/api/v1/admin", tags=["Admin"])
 # ==========================================
 def get_admin_user(current_user: Users = Depends(get_current_user)):
     """Vệ sĩ: Chặn tất cả những ai không phải Admin"""
-    if current_user.role is not RoleEnum.Admin:
+    if current_user.role != RoleEnum.Admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Quyền truy cập bị từ chối. Chỉ Admin mới thực hiện được hành động này."
@@ -57,7 +57,7 @@ def get_pending_posts(
     """
     Lấy danh sách các bài đăng đang chờ duyệt (KẾT NỐI DB THẬT)
     """
-    posts = db.query(Posts).filter(Posts.approval_status == "Pending").offset(skip).limit(limit).all()
+    posts = db.query(Post).filter(Post.approval_status == "Pending").offset(skip).limit(limit).all()
     result = []
     for p in posts:
         result.append({
@@ -66,7 +66,7 @@ def get_pending_posts(
             "seller_email": p.seller_email,
             "post_category": p.post_type if hasattr(p, 'post_type') else "Unknown",
             "status": p.approval_status,
-            "created_at": p.created_at.isoformat() if p.created_at is not None else None
+            "created_at": p.created_at.isoformat() if p.created_at else None
         })
     return result
 
@@ -81,20 +81,20 @@ def approve_post_admin(
     """
     Duyệt hoặc từ chối bài đăng (KẾT NỐI DB THẬT)
     """
-    post = db.query(Posts).filter(Posts.post_id == post_id).first()
+    post = db.query(Post).filter(Post.post_id == post_id).first()
     if not post:
         raise HTTPException(status_code=404, detail="Không tìm thấy bài viết")
 
     if data.action == "approve":
-        post.approval_status = "Approved" # type: ignore
-        post.open_status = "Available" # type: ignore
+        post.approval_status = "Approved"
+        post.open_status = "Available"
     elif data.action == "reject":
-        post.approval_status = "Rejected" # type: ignore
-        post.rejection_reason = data.reject_reason if data.reject_reason else None # type: ignore
-        post.open_status = "Closed" # type: ignore
+        post.approval_status = "Rejected"
+        post.rejection_reason = data.reject_reason
+        post.open_status = "Closed"
 
     post.reviewed_by = admin.user_email
-    post.reviewed_at = datetime.utcnow() # type: ignore
+    post.reviewed_at = datetime.utcnow()
     
     db.commit()
     db.refresh(post)
@@ -125,7 +125,7 @@ def get_pending_campaigns(
             "title": c.title,
             "org_email": c.organ_email,
             "status": c.approval_status,
-            "created_at": c.start_date.isoformat() if c.start_date is not None else None
+            "created_at": c.start_date.isoformat() if c.start_date else None
         })
     return result
 
@@ -159,7 +159,7 @@ def approve_campaign_admin(
     db.refresh(campaign)
 
     return {
-        "message": f"Campaign {data.action} successfully",
+        "message": f"Campaigns {data.action} successfully",
         "campaign_id": campaign.campaign_id,
         "status": campaign.approval_status,
         "reviewed_by": admin.user_email
@@ -204,7 +204,7 @@ def list_all_users(
             "name": u.user_name,
             "phone": u.phone,
             "role": u.role,
-            "created_at": u.created_at.isoformat() if u.created_at is not None else None
+            "created_at": u.created_at.isoformat() if u.created_at else None
         })
     return result
 
@@ -226,7 +226,7 @@ def update_user_role(
     if not user:
         raise HTTPException(status_code=404, detail="Không tìm thấy người dùng")
         
-    user.role = role # type: ignore
+    user.role = role
     db.commit()
     db.refresh(user)
 

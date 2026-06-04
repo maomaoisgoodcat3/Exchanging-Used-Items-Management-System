@@ -1,248 +1,223 @@
-"""User Management API Endpoints"""
+"""Users & Organizations Management API Endpoints"""
 from fastapi import APIRouter, HTTPException, status, Depends
 from typing import Optional, List
-from app.schemas.user_schema import (
-    UserUpdate, UserChangePassword, UserRead, TokenResponse,
-    DirectoryBase, OrganizationCreate, OrganizationRead, OrganizationMemberRead
-)
+from sqlalchemy.orm import Session
+from pydantic import BaseModel, EmailStr
 
-router = APIRouter(prefix="/api/v1/users", tags=["Users"])
+from app.core.database import get_db
+from app.services.auth_svc import get_current_user
+from app.models.users import Users, Organizations, OrganizationMembers
+from app.models.campaigns import Campaigns
 
+router = APIRouter(prefix="/api/v1/users", tags=["Users & Organizations"])
 
-@router.get("/me", response_model=UserRead)
-def get_current_user(current_user: str = Depends()):
-    """
-    Get current authenticated user's profile
-    
-    Database: Users table
-    - Retrieves user data by email (primary key)
-    - Returns: email, name, phone, role, created_at
-    """
+# ==========================================
+# 1. PYDANTIC SCHEMAS (Định nghĩa Dữ liệu)
+# ==========================================
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+
+class MemberAddRequest(BaseModel):
+    user_email: EmailStr
+
+class MemberRoleUpdate(BaseModel):
+    permission: str # Manager, Poster, Member
+
+# ==========================================
+# 2. API QUẢN LÝ HỒ SƠ (PROFILE)
+# ==========================================
+@router.get("/me")
+def get_my_profile(current_user: Users = Depends(get_current_user)):
+    """Lấy thông tin cá nhân (Tab Account)"""
     return {
-        "email": current_user,
-        "name": "User Name",
-        "phone": "+84912345678",
-        "role": "Member",
-        "created_at": "2024-05-31T15:39:31"
+        "email": current_user.email,
+        "name": current_user.name,
+        "phone": current_user.phone,
+        "role": current_user.role,
+        "created_at": current_user.created_at
+    }
+
+@router.put("/me")
+def update_my_profile(data: UserUpdate, db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
+    """Cập nhật thông tin cá nhân (DB Thật)"""
+    if data.name:
+        current_user.name = data.name
+    if data.phone:
+        current_user.phone = data.phone
+    db.commit()
+    return {"message": "Cập nhật thông tin thành công!"}
+
+# ==========================================
+# 3. API QUẢN LÝ TỔ CHỨC (ORGANIZATIONS)
+# ==========================================
+@router.get("/my-organizations")
+def get_my_organizations(db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
+    """Lấy danh sách Tổ chức Users đang tham gia kèm Thống kê"""
+    memberships = db.query(OrganizationMembers).filter(OrganizationMembers.mem_email == current_user.email).all()
+    
+    org_list = []
+    for mem in memberships:
+        org = db.query(Organizations).filter(Organizations.org_email == mem.org_email).first()
+        if org:
+            # Đếm số chiến dịch đã Approved
+            campaign_count = db.query(Campaigns).filter(Campaigns.org_email == org.org_email, Campaigns.approval == "Approved").count()
+            # Đếm tổng thành viên
+            member_count = db.query(OrganizationMembers).filter(OrganizationMembers.org_email == org.org_email).count()
+            
+            org_list.append({
+                "org_email": org.org_email,
+                "org_name": org.org_name,
+                "representative_email": org.representative_email,
+                "my_permission": mem.mem_permission,
+                "total_members": member_count,
+                "total_campaigns": campaign_count
+            })
+    return org_list
+
+
+@router.get("/organizations/{org_email}")
+def get_organization_detail(org_email: str, db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
+    """Xem chi tiết 1 Tổ chức & List Thành viên (Xếp Manager -> Poster -> Member)"""
+    org = db.query(Organizations).filter(Organizations.org_email == org_email).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Không tìm thấy Tổ chức")
+
+    memberships = db.query(OrganizationMembers).filter(OrganizationMembers.org_email == org_email).all()
+    
+    # Map ưu tiên xếp hạng
+    role_priority = {"Manager": 1, "Poster": 2, "Member": 3}
+    
+    member_list = []
+    for m in memberships:
+        user_info = db.query(Users).filter(Users.email == m.mem_email).first()
+        member_list.append({
+            "email": m.mem_email,
+            "name": user_info.name if user_info else "Unknown",
+            "permission": m.mem_permission,
+            "priority": role_priority.get(m.mem_permission, 4)
+        })
+        
+    # Sắp xếp danh sách
+    member_list.sort(key=lambda x: x["priority"])
+
+    return {
+        "org_info": {
+            "org_email": org.org_email,
+            "org_name": org.org_name,
+            "description": org.description,
+            "representative_email": org.representative_email
+        },
+        "members": member_list
     }
 
 
-@router.put("/me", response_model=dict)
-def update_user_profile(data: UserUpdate, current_user: str = Depends()):
-    """
-    Update current user's profile information
-    
-    Database: Users table
-    - Updates name, phone for the authenticated user (email)
-    - Only users can update their own profile
-    
-    - **name**: Full name (optional)
-    - **phone**: Phone number (optional)
-    """
-    return {
-        "message": "Profile updated successfully",
-        "user": {
-            "email": current_user,
-            "name": data.name or "User Name",
-            "phone": data.phone
-        }
-    }
-
-
-@router.get("/{email}", response_model=UserRead)
-def get_user_profile(email: str):
-    """
-    Get specific user's public profile
-    
-    Database: Users table
-    - Retrieves user by email (primary key)
-    - **email**: User email
-    """
-    return {
-        "email": email,
-        "name": "User Name",
-        "phone": "+84912345678",
-        "role": "Member",
-        "created_at": "2024-05-31T15:39:31"
-    }
-
-
-@router.post("/change-password", response_model=dict)
-def change_password(data: UserChangePassword, current_user: str = Depends()):
-    """
-    Change user password
-    
-    Database: Users table
-    - Updates password_hash for the authenticated user
-    
-    - **old_password**: Current password (verify against password_hash)
-    - **new_password**: New password
-    - **confirm_password**: Confirm new password
-    """
-    confirm_password = getattr(data, "confirm_password", None)
-    if confirm_password is not None and data.new_password != confirm_password:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Passwords don't match"
-        )
-    
-    return {
-        "message": "Password changed successfully"
-    }
-
-
-@router.get("/directory/list", response_model=List[DirectoryBase])
-def get_directory(
-    member_type: Optional[str] = None,
-    limit: int = 100,
-    skip: int = 0
-):
-    """
-    Get master directory of students/staff from schools
-    
-    Database: Directory table
-    - Retrieves records where member_type: Student/Teacher/Staff
-    - **member_type**: Filter by Student, Teacher, or Staff
-    - **limit**: Maximum results (default: 100)
-    - **skip**: Skip results (for pagination)
-    """
-    return [
-        {
-            "email": "user@uet.edu.vn",
-            "fullname": "Student Name",
-            "member_type": "Student"
-        }
-    ]
-
-
-@router.post("/organization", response_model=dict, status_code=status.HTTP_201_CREATED)
-def create_organization(data: OrganizationCreate, current_user: str = Depends()):
-    """
-    Create a new organization
-    
-    Database: Organizations table
-    - **org_email**: Organization email (primary key)
-    - **org_name**: Organization name
-    - **representative_email**: Representative's email (must exist in Users table)
-    - **description**: Organization description
-    
-    Current user becomes the representative
-    """
-    return {
-        "message": "Organization created successfully",
-        "organization": {
-            "org_email": data.org_email or f"org_{current_user.split('@')[0]}@uet.edu.vn",
-            "org_name": data.org_name,
-            "representative_email": current_user,
-            "description": data.description,
-            "created_at": "2024-05-31T15:39:31"
-        }
-    }
-
-
-@router.get("/organization/{org_email}", response_model=OrganizationRead)
-def get_organization(org_email: str):
-    """
-    Get organization details
-    
-    Database: Organizations table
-    - Retrieves organization by org_email (primary key)
-    - **org_email**: Organization email
-    """
-    return {
-        "org_email": org_email,
-        "org_name": "Organization Name",
-        "representative_email": "rep@uet.edu.vn",
-        "description": "Organization Description"
-    }
-
-
-@router.put("/organization/{org_email}", response_model=dict)
-def update_organization(
-    org_email: str,
-    data: OrganizationCreate,
-    current_user: str = Depends()
-):
-    """
-    Update organization information (representative only)
-    
-    Database: Organizations table
-    - Updates org_name, representative_email, description
-    - Only representative can update
-    
-    - **org_email**: Organization email
-    """
-    return {
-        "message": "Organization updated successfully",
-        "org_email": org_email
-    }
-
-
-@router.get("/organization/{org_email}/members", response_model=List[OrganizationMemberRead])
-def get_organization_members(
-    org_email: str,
-    limit: int = 50,
-    skip: int = 0
-):
-    """
-    Get members of an organization
-    
-    Database: Organizations_Members table
-    - Retrieves members where org_email matches
-    - **org_email**: Organization email
-    - **limit**: Maximum results
-    - **skip**: Skip results (pagination)
-    """
-    return [
-        {
-            "mem_email": "member@uet.edu.vn",
-            "mem_permission": "Member",
-            "joined_at": "2024-01-01T00:00:00"
-        }
-    ]
-
-
-@router.post("/organization/{org_email}/members", response_model=dict)
+@router.post("/organizations/{org_email}/members")
 def add_organization_member(
-    org_email: str,
-    mem_email: str,
-    mem_permission: str = "Member",
-    current_user: str = Depends()
+    org_email: str, 
+    data: MemberAddRequest, 
+    db: Session = Depends(get_db), 
+    current_user: Users = Depends(get_current_user)
 ):
-    """
-    Add member to organization (admin only)
+    """Manager thêm thành viên mới"""
+    manager_check = db.query(OrganizationMembers).filter(
+        OrganizationMembers.org_email == org_email,
+        OrganizationMembers.mem_email == current_user.email,
+        OrganizationMembers.mem_permission == "Manager"
+    ).first()
     
-    Database: Organizations_Members table
-    - Inserts new record with org_email, mem_email, mem_permission
-    - **org_email**: Organization email
-    - **mem_email**: Member's email (must exist in Users table)
-    - **mem_permission**: Member Manager, Poster, or Member
-    """
-    return {
-        "message": "Member added successfully",
-        "org_email": org_email,
-        "mem_email": mem_email,
-        "mem_permission": mem_permission
-    }
+    if not manager_check:
+        raise HTTPException(status_code=403, detail="Chỉ Manager mới có quyền thêm thành viên!")
+
+    new_user = db.query(Users).filter(Users.email == data.user_email).first()
+    if not new_user:
+        raise HTTPException(status_code=404, detail="Email người dùng không tồn tại!")
+        
+    existing_mem = db.query(OrganizationMembers).filter(
+        OrganizationMembers.org_email == org_email, 
+        OrganizationMembers.mem_email == data.user_email
+    ).first()
+    if existing_mem:
+        raise HTTPException(status_code=400, detail="Người này đã ở trong Tổ chức!")
+
+    new_member = OrganizationMembers(
+        org_email=org_email,
+        mem_email=data.user_email,
+        mem_permission="Member"
+    )
+    db.add(new_member)
+    db.commit()
+    
+    return {"message": f"Đã thêm {data.user_email} thành công!"}
 
 
-@router.delete("/organization/{org_email}/members/{mem_email}", response_model=dict)
-def remove_organization_member(
-    org_email: str,
-    mem_email: str,
-    current_user: str = Depends()
+@router.put("/organizations/{org_email}/members/{mem_email}/role")
+def update_member_role(
+    org_email: str, 
+    mem_email: str, 
+    data: MemberRoleUpdate, 
+    db: Session = Depends(get_db), 
+    current_user: Users = Depends(get_current_user)
 ):
-    """
-    Remove member from organization (admin only)
+    """Manager cấp quyền Poster hoặc Chuyển giao quyền Manager"""
+    org = db.query(Organizations).filter(Organizations.org_email == org_email).first()
+    target_member = db.query(OrganizationMembers).filter(
+        OrganizationMembers.org_email == org_email, OrganizationMembers.mem_email == mem_email
+    ).first()
+    current_manager = db.query(OrganizationMembers).filter(
+        OrganizationMembers.org_email == org_email, OrganizationMembers.mem_email == current_user.email
+    ).first()
+
+    if not org or not target_member or not current_manager:
+        raise HTTPException(status_code=404, detail="Dữ liệu không hợp lệ")
+
+    if current_manager.mem_permission != "Manager":
+        raise HTTPException(status_code=403, detail="Chỉ Manager mới có quyền thao tác!")
+
+    if data.permission not in ["Manager", "Poster", "Member"]:
+        raise HTTPException(status_code=400, detail="Role không hợp lệ!")
+
+    # LOGIC TRUYỀN NGÔI (Chuyển quyền Manager)
+    if data.permission == "Manager":
+        current_manager.mem_permission = "Member"
+        target_member.mem_permission = "Manager"
+        org.representative_email = mem_email
+        db.commit()
+        return {"message": f"Đã chuyển quyền Manager cho {mem_email}. Bạn đã trở thành Member."}
+        
+    # Cấp quyền Poster / Member bình thường
+    target_member.mem_permission = data.permission
+    db.commit()
+    return {"message": f"Đã cập nhật quyền của {mem_email} thành {data.permission}."}
+
+
+# ==========================================
+# 4. CHỈNH SỬA THÔNG TIN TỔ CHỨC
+# ==========================================
+class OrgUpdateDescription(BaseModel):
+    description: str
+
+@router.put("/organizations/{org_email}")
+def update_organization_info(
+    org_email: str,
+    data: OrgUpdateDescription,
+    db: Session = Depends(get_db),
+    current_user: Users = Depends(get_current_user)
+):
+    """Người đại diện (Manager) chỉnh sửa Description của Tổ chức"""
+    # 1. Kiểm tra quyền Manager
+    manager_check = db.query(OrganizationMembers).filter(
+        OrganizationMembers.org_email == org_email,
+        OrganizationMembers.mem_email == current_user.email,
+        OrganizationMembers.mem_permission == "Manager"
+    ).first()
     
-    Database: Organizations_Members table
-    - Deletes record where org_email and mem_email match
+    if not manager_check:
+        raise HTTPException(status_code=403, detail="Chỉ Manager mới có quyền chỉnh sửa thông tin Tổ chức!")
+
+    # 2. Cập nhật DB
+    org = db.query(Organizations).filter(Organizations.org_email == org_email).first()
+    org.description = data.description
+    db.commit()
     
-    - **org_email**: Organization email
-    - **mem_email**: Member email to remove
-    """
-    return {
-        "message": "Member removed successfully",
-        "org_email": org_email,
-        "mem_email": mem_email
-    }
+    return {"message": "Cập nhật mô tả Tổ chức thành công!"}

@@ -2,46 +2,81 @@ from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from decimal import Decimal
-
+from enum import Enum
 
 # ============================================================================
-# ENUMS
+# ENUMS (Đồng bộ chuẩn xác với cơ sở dữ liệu mới)
 # ============================================================================
 
-class TransactionTypeEnum(str):
+class PostCategoryEnum(str, Enum):
     SELLING = "Selling"
     TRADING = "Trading"
     DONATING = "Donating"
 
 
-class TransactionResultEnum(str):
+class PosterStatusEnum(str, Enum):
     PENDING = "Pending"
     ACCEPTED = "Accepted"
     DENIED = "Denied"
+    READY_FOR_PICKUP = "Ready for pickup"
     SUCCESSFUL = "Successful"
 
 
+class RequesterStatusEnum(str, Enum):
+    PENDING = "Pending"
+    ACCEPTED = "Accepted"
+    DENIED = "Denied"
+    DEPOSITED = "Deposited"
+    CLAIMED = "Claimed"
+    SUCCESSFUL = "Successful"
+
+
+class ProductSourceEnum(str, Enum):
+    POSTER = "Poster"
+    REQUESTER = "Requester"
+
+
 # ============================================================================
-# BASE & EXISTING SCHEMAS (Selling)
+# TRANSACTION PRODUCTS SCHEMAS (Bảng con chi tiết sản phẩm)
+# ============================================================================
+
+class TransactionProductBase(BaseModel):
+    product_id: int
+    quantity: int = Field(..., gt=0)
+    product_source: ProductSourceEnum
+
+
+class TransactionProductCreate(TransactionProductBase):
+    pass
+
+
+class TransactionProductRead(TransactionProductBase):
+    class Config:
+        from_attributes = True
+
+
+# ============================================================================
+# BASE & GENERAL TRANSACTION SCHEMAS
 # ============================================================================
 
 class TransactionBase(BaseModel):
     post_id: int
-    product_id: int
-    quantity: int = Field(..., gt=0)
 
 
 class TransactionCreate(TransactionBase):
-    pass
+    # Khi tạo một đơn hàng/giao dịch chung, cần truyền kèm danh sách sản phẩm
+    products: List[TransactionProductCreate] = Field(..., min_length=1)
 
 
 class TransactionRead(TransactionBase):
     transaction_id: int
-    buyer_email: EmailStr
+    requester_email: EmailStr  # Đổi từ buyer_email
     service_fee: Decimal
-    order_status: str
-    transaction_status: str
+    Poster_status: PosterStatusEnum  # Đổi từ order_status
+    Requester_status: RequesterStatusEnum  # Đổi từ transaction_status
     transaction_date: datetime
+    updated_at: Optional[datetime] = None
+    products: List[TransactionProductRead]  # Lấy kèm danh sách sản phẩm liên quan
 
     class Config:
         from_attributes = True
@@ -50,59 +85,59 @@ class TransactionRead(TransactionBase):
 class TransactionListRead(BaseModel):
     transaction_id: int
     post_id: int
-    product_id: int
-    buyer_email: EmailStr
-    quantity: int
+    requester_email: EmailStr
     service_fee: Decimal
-    order_status: str
-    transaction_status: str
+    Poster_status: PosterStatusEnum
+    Requester_status: RequesterStatusEnum
     transaction_date: datetime
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
 
 
 class TransactionFilter(BaseModel):
-    buyer_email: Optional[EmailStr] = None
+    requester_email: Optional[EmailStr] = None
     post_id: Optional[int] = None
-    order_status: Optional[str] = None
-    transaction_status: Optional[str] = None
+    Poster_status: Optional[PosterStatusEnum] = None
+    Requester_status: Optional[RequesterStatusEnum] = None
     date_from: Optional[datetime] = None
     date_to: Optional[datetime] = None
-    sort_by: Optional[str] = Field(default="transaction_date", pattern="^(transaction_date|order_status)$")
+    sort_by: Optional[str] = Field(default="transaction_date", pattern="^(transaction_date|Poster_status|Requester_status)$")
     sort_order: Optional[str] = Field(default="desc", pattern="^(asc|desc)$")
     skip: int = Field(default=0, ge=0)
     limit: int = Field(default=10, ge=1, le=100)
 
 
 class TransactionStatusUpdate(BaseModel):
-    order_status: Optional[str] = Field(None, pattern="^(Pending|Ready for pickup|Successful)$")
-    transaction_status: Optional[str] = Field(None, pattern="^(Pending|Deposited|Successful)$")
+    Poster_status: Optional[PosterStatusEnum] = None
+    Requester_status: Optional[RequesterStatusEnum] = None
 
 
 # ============================================================================
 # TRADING TRANSACTION SCHEMAS
 # ============================================================================
 
-class TradeProductOffer(BaseModel):
-    """Product offered in a trade"""
+class TradeItemInput(BaseModel):
     product_id: int
     quantity: int = Field(..., gt=0)
 
 
 class TradingTransactionCreate(BaseModel):
-    """Create a trading transaction"""
+    """Người đi đổi tạo yêu cầu giao dịch"""
     post_id: int
-    trading_product_id: int
-    trading_quantity: int = Field(..., gt=0)
-    offered_products: List[TradeProductOffer] = Field(..., min_items=1)
+    # Danh sách mặt hàng muốn lấy từ bài đăng của Poster
+    wanted_products: List[TradeItemInput] = Field(..., min_length=1)
+    # Danh sách mặt hàng của bản thân mang ra đối ứng (Requester)
+    offered_products: List[TradeItemInput] = Field(..., min_length=1)
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "post_id": 5,
-                "trading_product_id": 10,
-                "trading_quantity": 1,
+                "wanted_products": [
+                    {"product_id": 10, "quantity": 1}
+                ],
                 "offered_products": [
                     {"product_id": 20, "quantity": 2}
                 ]
@@ -111,23 +146,21 @@ class TradingTransactionCreate(BaseModel):
 
 
 class TradeReview(BaseModel):
-    """Accept or deny a trade offer"""
+    """Poster bấm Accept hoặc Deny giao dịch trao đổi"""
     action: str = Field(..., pattern="^(Accept|Deny)$")
     review_notes: Optional[str] = None
 
 
 class TradingTransactionRead(BaseModel):
-    """Trading transaction response"""
+    """Xem chi tiết đơn trao đổi đồ"""
     transaction_id: int
     post_id: int
-    product_id: int
-    quantity: int
-    buyer_email: EmailStr
-    seller_email: EmailStr
-    offered_products: List[Dict[str, Any]]
-    result: str
-    reviewed_at: Optional[datetime] = None
+    requester_email: EmailStr
+    Poster_status: PosterStatusEnum
+    Requester_status: RequesterStatusEnum
+    products: List[TransactionProductRead]
     transaction_date: datetime
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -138,32 +171,27 @@ class TradingTransactionRead(BaseModel):
 # ============================================================================
 
 class DonationTransactionCreate(BaseModel):
-    """Claim a donation"""
+    """Người nhận bấm Claim nhận đồ hoặc Manager đăng ký nhận đồ quyên góp"""
     post_id: int
-    product_id: int
-    quantity: int = Field(..., gt=0)
-    campaign_id: Optional[int] = None
+    products: List[TradeItemInput] = Field(..., min_length=1)
 
 
 class DonationReview(BaseModel):
-    """Approve or reject a campaign donation"""
-    action: str = Field(..., pattern="^(Approve|Reject)$")
+    """Manager của chiến dịch duyệt hoặc từ chối đơn đồ quyên góp nhận vào"""
+    action: str = Field(..., pattern="^(Accept|Deny)$")
     approval_reason: Optional[str] = None
 
 
 class DonationTransactionRead(BaseModel):
-    """Donation transaction response"""
+    """Thông tin phản hồi về đơn quyên góp/nhận đồ"""
     transaction_id: int
     post_id: int
-    product_id: int
-    quantity: int
-    donor_email: EmailStr
-    claimer_email: EmailStr
-    campaign_id: Optional[int] = None
-    result: str
-    reviewed_by: Optional[EmailStr] = None
-    reviewed_at: Optional[datetime] = None
+    requester_email: EmailStr  # Người nhận (Nếu tự do) hoặc Email của Manager đứng ra nhận (Nếu campaign)
+    Poster_status: PosterStatusEnum
+    Requester_status: RequesterStatusEnum
+    products: List[TransactionProductRead]
     transaction_date: datetime
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -174,13 +202,11 @@ class DonationTransactionRead(BaseModel):
 # ============================================================================
 
 class TransactionHistory(BaseModel):
-    """User's transaction history"""
     transaction_id: int
     post_id: int
-    transaction_type: str
-    quantity: int
-    other_party_email: EmailStr
-    result: str
+    post_category: PostCategoryEnum
+    Poster_status: PosterStatusEnum
+    Requester_status: RequesterStatusEnum
     transaction_date: datetime
 
     class Config:
@@ -188,7 +214,6 @@ class TransactionHistory(BaseModel):
 
 
 class UserTransactionSummary(BaseModel):
-    """Summary of user's transactions"""
     total_sales: int = 0
     total_trades: int = 0
     successful_trades: int = 0
@@ -198,46 +223,9 @@ class UserTransactionSummary(BaseModel):
     recent_transactions: List[TransactionHistory] = []
 
 
-# Trading-specific schemas
-class TradeProductOffer(BaseModel):
-    """Product offered in trade"""
-    product_id: int
-    quantity: int = Field(..., gt=0)
-
-
-class TradeOrderCreate(BaseModel):
-    """Create a trade order for a Trading post"""
-    post_id: int
-    trading_post_product_id: int
-    trading_post_quantity: int = Field(..., gt=0)
-    offered_products: List[TradeProductOffer] = Field(..., min_items=1, description="Items trader wants to offer")
-
-    class Config:
-        schema_extra = {
-            "example": {
-                "post_id": 5,
-                "trading_post_product_id": 10,
-                "trading_post_quantity": 1,
-                "offered_products": [
-                    {"product_id": 20, "quantity": 2}
-                ]
-            }
-        }
-
-
-class TradeOrderRead(BaseModel):
-    """Trade order response"""
-    transaction_id: int
-    post_id: int
-    buyer_email: EmailStr
-    trading_items: dict  # Products being traded
-    offered_items: dict  # Products offered in return
-    order_status: str
-    transaction_date: datetime
-
-    class Config:
-        from_attributes = True
-
+# ============================================================================
+# SETTINGS & OTHER RELATED SCHEMAS (Giữ nguyên logic của bạn)
+# ============================================================================
 
 class SettingsBase(BaseModel):
     setting_name: str
@@ -304,7 +292,7 @@ class CartItemRead(CartItemBase):
 
 
 class CartRead(BaseModel):
-    items: list[CartItemRead]
+    items: List[CartItemRead]
     total_amount: Decimal
 
     class Config:

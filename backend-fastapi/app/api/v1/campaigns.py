@@ -10,7 +10,7 @@ from jose import jwt
 
 from app.core.database import get_db
 from app.services.auth_svc import get_current_user
-# Đã sửa AccountUser thành User cho khớp với DB hiện tại
+# Đã sửa AccountUser thành Users cho khớp với DB hiện tại
 from app.models.users import Users, Organizations, OrganizationMembers
 from app.models.campaigns import Campaigns
 
@@ -82,8 +82,8 @@ def list_campaigns(request: Request, org_email: Optional[str] = None, db: Sessio
         result.append({
             "campaign_id": c.campaign_id, "org_email": c.org_email, "org_name": org.org_name if org else "Unknown",
             "title": c.title, "description": desc,
-            "start_date": c.start_date.isoformat() if c.start_date is not None else None,
-            "end_date": c.end_date.isoformat() if hasattr(c, 'end_date') and c.end_date is not None else None,
+            "start_date": c.start_date.isoformat() if c.start_date else None,
+            "end_date": c.end_date.isoformat() if hasattr(c, 'end_date') and c.end_date else None,
             "approval": approval_val, "availability": getattr(c, 'availability', 'Closed'),
             "thumbnail_url": img_url, "reject_reason": reason
         })
@@ -120,15 +120,15 @@ def update_campaign(campaign_id: int, data: CampaignCreate, db: Session = Depend
     final_desc = data.description
     if data.image_url: final_desc += f"||IMG:{data.image_url}||"
 
-    campaign.title = data.title # type: ignore
-    campaign.description = final_desc # type: ignore
-    campaign.start_date = data.start_date # type: ignore
-    campaign.end_date = data.end_date # type: ignore
+    campaign.title = data.title
+    campaign.description = final_desc
+    campaign.start_date = data.start_date
+    campaign.end_date = data.end_date
     
     # Logic: Bị Reject mà sửa lại thì tự thành Resending
     approval_val = campaign.approval.value if hasattr(campaign.approval, 'value') else str(campaign.approval)
     if "Rejected" in approval_val:
-        campaign.approval = "Resending" # type: ignore
+        campaign.approval = "Resending"
         
     db.commit()
     return {"message": "Đã cập nhật và Gửi lại cho Admin!"}
@@ -140,15 +140,15 @@ def approve_campaign(campaign_id: int, data: CampaignApprovalAction, db: Session
     if not campaign: raise HTTPException(status_code=404, detail="Không tìm thấy")
         
     if data.action == "approve":
-        campaign.approval = "Approved" # type: ignore
-        campaign.availability = "Open" # type: ignore
+        campaign.approval = "Approved"
+        campaign.availability = "Open"
         if hasattr(campaign, 'rejection_reason'): campaign.rejection_reason = None
-        if hasattr(campaign, 'reject_reason'): campaign.reject_reason = None # type: ignore
+        if hasattr(campaign, 'reject_reason'): campaign.reject_reason = None
     elif data.action == "reject":
-        campaign.approval = "Rejected" # type: ignore
-        campaign.availability = "Closed" # type: ignore
+        campaign.approval = "Rejected"
+        campaign.availability = "Closed"
         if hasattr(campaign, 'rejection_reason'): campaign.rejection_reason = data.reject_reason
-        if hasattr(campaign, 'reject_reason'): campaign.reject_reason = data.reject_reason # type: ignore
+        if hasattr(campaign, 'reject_reason'): campaign.reject_reason = data.reject_reason
         
     campaign.reviewed_by = current_user.email
     db.commit()
