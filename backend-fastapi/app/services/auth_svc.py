@@ -1,8 +1,11 @@
+from typing import cast, Optional
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status, Depends
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from app.models.user import User, Directory
+
+# Dùng Model chuẩn
+from app.models.users import Users, Directory
 from app.schemas.user_schema import UserCreate
 from app.core.security import get_password_hash, verify_password
 from app.core.config import settings
@@ -10,7 +13,8 @@ from app.core.database import get_db
 
 def create_user(db: Session, user_in: UserCreate):
     # 1. Kiểm tra danh sách nhà trường
-    directory_record = db.query(Directory).filter(Directory.school_email == user_in.email).first()
+    # ĐÃ SỬA LỖI NGẦM: Dùng Directory.email thay vì school_email
+    directory_record = db.query(Directory).filter(Directory.email == user_in.email).first()
     if not directory_record:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, 
@@ -18,7 +22,7 @@ def create_user(db: Session, user_in: UserCreate):
         )
 
     # 2. Kiểm tra trùng lặp
-    existing_user = db.query(User).filter(User.email == user_in.email).first()
+    existing_user = db.query(Users).filter(Users.email == user_in.email).first()
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, 
@@ -26,7 +30,7 @@ def create_user(db: Session, user_in: UserCreate):
         )
 
     # 3. Tạo user mới
-    db_user = User(
+    db_user = Users(
         email=user_in.email,
         name=user_in.name,
         password_hash=get_password_hash(user_in.password),
@@ -38,10 +42,11 @@ def create_user(db: Session, user_in: UserCreate):
     return db_user
 
 def authenticate_user(db: Session, email: str, password: str):
-    user = db.query(User).filter(User.email == email).first()
+    user = db.query(Users).filter(Users.email == email).first()
     if not user:
         return False
-    if not verify_password(password, user.password_hash):
+    # Ép kiểu an toàn để qua mặt các công cụ check lỗi tĩnh (mypy)
+    if not verify_password(password, str(user.password_hash)):
         return False
     return user
 
@@ -57,14 +62,14 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     try:
         # Giải mã JWT để lấy email
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        email: str = payload.get("sub")
+        email: Optional[str] = payload.get("sub")
         if email is None:
             raise credentials_exception
     except JWTError:
         raise credentials_exception
         
     # Tìm user trong Database
-    user = db.query(User).filter(User.email == email).first()
+    user = db.query(Users).filter(Users.email == email).first()
     if user is None:
         raise credentials_exception
     return user

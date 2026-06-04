@@ -7,10 +7,10 @@ from fastapi.staticfiles import StaticFiles
 # KHỞI TẠO TOÀN BỘ MODELS ĐỂ TRÁNH LỖI RELATIONSHIP
 # Dù có dùng Router hay không, Models vẫn phải được nạp vào bộ nhớ
 # ==========================================
-import app.models.user
-import app.models.campaign
-import app.models.post
-import app.models.transaction
+import app.models.users
+import app.models.campaigns
+import app.models.posts
+import app.models.transactions
 
 from app.api.v1 import auth, users, campaigns
 

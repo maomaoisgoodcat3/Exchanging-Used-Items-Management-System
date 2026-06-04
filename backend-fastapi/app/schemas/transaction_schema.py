@@ -1,10 +1,24 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from decimal import Decimal
 
+# ============================================================================
+# ENUMS (Từ nhánh của team)
+# ============================================================================
+class TransactionTypeEnum(str):
+    SELLING = "Selling"
+    TRADING = "Trading"
+    DONATING = "Donating"
+
+class TransactionResultEnum(str):
+    PENDING = "Pending"
+    ACCEPTED = "Accepted"
+    DENIED = "Denied"
+    SUCCESSFUL = "Successful"
+
 # ==========================================
-# 1. TRANSACTION PRODUCTS (Sản phẩm giao dịch)
+# 1. TRANSACTION PRODUCTS (Sản phẩm giao dịch đa luồng - TỪ HEAD)
 # ==========================================
 class TransactionProductBase(BaseModel):
     product_id: int
@@ -19,7 +33,7 @@ class TransactionProductRead(TransactionProductBase):
         from_attributes = True
 
 # ==========================================
-# 2. TRANSACTIONS (Giao dịch chính)
+# 2. TRANSACTIONS (Giao dịch chính - TỪ HEAD)
 # ==========================================
 class TransactionBase(BaseModel):
     post_id: int
@@ -30,6 +44,7 @@ class TransactionCreate(TransactionBase):
 
 class TransactionRead(TransactionBase):
     transaction_id: int
+    requester_email: EmailStr
     service_fee: Decimal
     poster_status: str
     requester_status: str
@@ -41,7 +56,6 @@ class TransactionRead(TransactionBase):
 class TransactionDetailRead(TransactionRead):
     products: List[TransactionProductRead]
 
-# CLASS BỊ THIẾU ĐÃ ĐƯỢC THÊM LẠI
 class TransactionListRead(TransactionRead):
     pass
 
@@ -61,8 +75,119 @@ class TransactionStatusUpdate(BaseModel):
     poster_status: Optional[str] = Field(None, pattern="^(Pending|Accepted|Denied|Ready for pickup|Successful)$")
     requester_status: Optional[str] = Field(None, pattern="^(Pending|Accepted|Denied|Deposited|Successful|Unsuccessful)$")
 
+# ============================================================================
+# 3. TRADING TRANSACTION SCHEMAS (Từ nhánh Team - Đã chuẩn hóa DB)
+# ============================================================================
+class TradeProductOffer(BaseModel):
+    """Product offered in a trade"""
+    product_id: int
+    quantity: int = Field(..., gt=0)
+
+class TradingTransactionCreate(BaseModel):
+    """Create a trading transaction"""
+    post_id: int
+    trading_product_id: int
+    trading_quantity: int = Field(..., gt=0)
+    offered_products: List[TradeProductOffer] = Field(..., min_items=1)
+
+class TradeReview(BaseModel):
+    """Accept or deny a trade offer"""
+    action: str = Field(..., pattern="^(Accept|Deny)$")
+    review_notes: Optional[str] = None
+
+class TradingTransactionRead(BaseModel):
+    """Trading transaction response"""
+    transaction_id: int
+    post_id: int
+    requester_email: EmailStr 
+    offered_products: List[Dict[str, Any]] = []
+    poster_status: str 
+    requester_status: str
+    reviewed_at: Optional[datetime] = None
+    transaction_date: datetime
+
+    class Config:
+        from_attributes = True
+
+class TradeOrderCreate(BaseModel):
+    """Create a trade order for a Trading post"""
+    post_id: int
+    trading_post_product_id: int
+    trading_post_quantity: int = Field(..., gt=0)
+    offered_products: List[TradeProductOffer] = Field(..., min_items=1, description="Items trader wants to offer")
+
+class TradeOrderRead(BaseModel):
+    """Trade order response"""
+    transaction_id: int
+    post_id: int
+    requester_email: EmailStr
+    trading_items: dict = {}
+    offered_items: dict = {}
+    poster_status: str
+    requester_status: str
+    transaction_date: datetime
+
+    class Config:
+        from_attributes = True
+
+# ============================================================================
+# 4. DONATION TRANSACTION SCHEMAS (Từ nhánh Team - Đã chuẩn hóa DB)
+# ============================================================================
+class DonationTransactionCreate(BaseModel):
+    """Claim a donation"""
+    post_id: int
+    product_id: int
+    quantity: int = Field(..., gt=0)
+    campaign_id: Optional[int] = None
+
+class DonationReview(BaseModel):
+    """Approve or reject a campaign donation"""
+    action: str = Field(..., pattern="^(Approve|Reject)$")
+    approval_reason: Optional[str] = None
+
+class DonationTransactionRead(BaseModel):
+    """Donation transaction response"""
+    transaction_id: int
+    post_id: int
+    requester_email: EmailStr
+    campaign_id: Optional[int] = None
+    poster_status: str 
+    requester_status: str
+    reviewed_by: Optional[EmailStr] = None
+    reviewed_at: Optional[datetime] = None
+    transaction_date: datetime
+
+    class Config:
+        from_attributes = True
+
+# ============================================================================
+# 5. TRANSACTION HISTORY & SUMMARY SCHEMAS (Từ nhánh Team - Đã chuẩn hóa DB)
+# ============================================================================
+class TransactionHistory(BaseModel):
+    """User's transaction history"""
+    transaction_id: int
+    post_id: int
+    transaction_type: str = "Unknown"
+    requester_email: EmailStr 
+    poster_status: str
+    requester_status: str
+    transaction_date: datetime
+
+    class Config:
+        from_attributes = True
+
+class UserTransactionSummary(BaseModel):
+    """Summary of user's transactions"""
+    total_sales: int = 0
+    total_trades: int = 0
+    successful_trades: int = 0
+    pending_trades: int = 0
+    total_donations_given: int = 0
+    total_donations_received: int = 0
+    recent_transactions: List[TransactionHistory] = []
+
 # ==========================================
-# 3. SETTINGS
+# 6. SETTINGS
 # ==========================================
 class SettingsBase(BaseModel):
     setting_name: str
@@ -85,7 +210,7 @@ class SettingsRead(SettingsBase):
         from_attributes = True
 
 # ==========================================
-# 4. PAYMENT, CART & RETURN (Của team bạn)
+# 7. PAYMENT, CART & RETURN
 # ==========================================
 class PaymentMethodBase(BaseModel):
     payment_type: str = Field(pattern="^(COD|QR)$")
@@ -102,6 +227,7 @@ class PaymentConfirm(BaseModel):
     payment_reference: Optional[str] = None
 
 class CartItemBase(BaseModel):
+    post_id: int
     product_id: int
     quantity: int = Field(..., gt=0)
 

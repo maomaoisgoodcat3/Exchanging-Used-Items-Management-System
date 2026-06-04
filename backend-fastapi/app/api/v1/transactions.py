@@ -2,47 +2,43 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from typing import Optional, List
 from decimal import Decimal
+from datetime import datetime
+
 from app.schemas.transaction_schema import (
     TransactionCreate, TransactionRead, TransactionFilter, TransactionStatusUpdate,
     PaymentInitiate, PaymentConfirm, CartItemCreate, CartRead, ReturnRequestCreate,
-    SettingsCreate, SettingsRead
+    SettingsCreate, SettingsRead, TransactionDetailRead
 )
 from app.services.auth_svc import get_current_user
-from app.models.user import AccountUser
-router = APIRouter(prefix="/api/v1/transactions", tags=["Transactions & Payments"])
+from app.models.users import Users
 
+router = APIRouter(prefix="/api/v1/transactions", tags=["Transactions & Payments"])
 
 @router.get("/", response_model=List[TransactionRead])
 def list_transactions(
-    order_status: Optional[str] = None,
-    transaction_status: Optional[str] = None,
+    poster_status: Optional[str] = None,
+    requester_status: Optional[str] = None,
     limit: int = 20,
     skip: int = 0,
-    current_user: AccountUser = Depends(get_current_user)
+    current_user: Users = Depends(get_current_user)
 ):
     """
-    List transactions for current user (as buyer)
+    List transactions for current user
     
     Database: Transactions table
-    - Retrieves transactions where buyer_email matches current user
-    - order_status: Pending, Ready for pickup, Successful
-    - transaction_status: Pending, Deposited, Successful
-    
-    - **order_status**: Filter by order status
-    - **transaction_status**: Filter by payment status
-    - **limit**: Results per page
-    - **skip**: Pagination offset
+    - Retrieves transactions where requester_email matches current user
+    - poster_status: Pending, Accepted, Denied, Ready for pickup, Successful
+    - requester_status: Pending, Accepted, Denied, Deposited, Successful, Unsuccessful
     """
     return [
         {
             "transaction_id": 1,
-            "product_id": 1,
-            "buyer_email": current_user,
-            "quantity": 1,
+            "post_id": 1,
+            "requester_email": current_user.email,
             "service_fee": Decimal("25.00"),
-            "order_status": "Pending",
-            "transaction_status": "Pending",
-            "transaction_date": "2024-05-31T15:39:31"
+            "poster_status": poster_status or "Pending",
+            "requester_status": requester_status or "Pending",
+            "transaction_date": datetime.utcnow()
         }
     ]
 
@@ -50,85 +46,76 @@ def list_transactions(
 @router.post("/", response_model=dict, status_code=status.HTTP_201_CREATED)
 def create_transaction(
     data: TransactionCreate,
-    current_user: AccountUser = Depends(get_current_user)
+    current_user: Users = Depends(get_current_user)
 ):
     """
-    Create a new transaction (purchase)
+    Create a new transaction (purchase/trade/donate)
     
-    Database: Transactions table
-    - **product_id**: Storage product ID (from PostProducts or Storage table)
-    - **buyer_email**: Current user's email
-    - **quantity**: Quantity to purchase
-    - **service_fee**: Calculated from Settings table fee_percentage
-    - **order_status**: Default 'Pending'
-    - **transaction_status**: Default 'Pending'
+    Database: Transactions & TransactionProducts table
     """
     return {
         "message": "Transaction created successfully",
         "transaction_id": 1,
-        "buyer_email": current_user,
-        "quantity": 1,
+        "post_id": data.post_id,
+        "requester_email": current_user.email,
         "service_fee": Decimal("25.00"),
-        "order_status": "Pending"
+        "poster_status": "Pending",
+        "requester_status": "Pending"
     }
 
 
-@router.get("/{transaction_id}", response_model=TransactionRead)
+@router.get("/{transaction_id}", response_model=TransactionDetailRead)
 def get_transaction_detail(
     transaction_id: int,
-    current_user: AccountUser = Depends(get_current_user)
+    current_user: Users = Depends(get_current_user)
 ):
     """
-    Get transaction details
-    
-    Database: Transactions table
-    - Retrieves transaction by transaction_id
-    - Can view own transactions as buyer
+    Get transaction details including list of products
     """
     return {
         "transaction_id": transaction_id,
-        "product_id": 1,
-        "buyer_email": current_user,
-        "quantity": 1,
+        "post_id": 1,
+        "requester_email": current_user.email,
         "service_fee": Decimal("25.00"),
-        "order_status": "Pending",
-        "transaction_status": "Pending",
-        "transaction_date": "2024-05-31T15:39:31"
+        "poster_status": "Pending",
+        "requester_status": "Pending",
+        "transaction_date": datetime.utcnow(),
+        "products": [
+            {
+                "product_id": 1,
+                "quantity": 1,
+                "product_source": "Poster"
+            }
+        ]
     }
 
 
 @router.post("/{transaction_id}/status", response_model=dict)
 def update_transaction_status(
     transaction_id: int,
-    order_status: Optional[str] = None,
-    transaction_status: Optional[str] = None,
-    current_user: AccountUser = Depends(get_current_user)
+    data: TransactionStatusUpdate,
+    current_user: Users = Depends(get_current_user)
 ):
     """
     Update transaction status
     
     Database: Transactions table
-    - Updates order_status: Pending -> Ready for pickup -> Successful
-    - Updates transaction_status: Pending -> Deposited -> Successful
     """
     return {
         "message": "Transaction status updated",
         "transaction_id": transaction_id,
-        "order_status": order_status,
-        "transaction_status": transaction_status
+        "poster_status": data.poster_status,
+        "requester_status": data.requester_status
     }
 
 
 @router.post("/payment/initiate", response_model=dict)
 def initiate_payment(
     data: PaymentInitiate,
-    current_user: AccountUser = Depends(get_current_user)
+    current_user: Users = Depends(get_current_user)
 ):
     """
     Initiate payment for a transaction
-    
-    - **transaction_id**: Transaction ID
-    - **amount**: Payment amount
     """
     return {
         "message": "Payment initiated",
@@ -140,13 +127,10 @@ def initiate_payment(
 @router.post("/payment/confirm", response_model=dict)
 def confirm_payment(
     data: PaymentConfirm,
-    current_user: AccountUser = Depends(get_current_user)
+    current_user: Users = Depends(get_current_user)
 ):
     """
     Confirm payment completion
-    
-    Database: Transactions table
-    - Updates transaction_status to 'Successful' or 'Deposited'
     """
     return {
         "message": "Payment confirmed",
@@ -155,14 +139,10 @@ def confirm_payment(
     }
 
 
-@router.get("/statistics", response_model=dict)
-def get_transaction_statistics(current_user: AccountUser = Depends(get_current_user)):
+@router.get("/statistics/summary", response_model=dict)
+def get_transaction_statistics(current_user: Users = Depends(get_current_user)):
     """
     Get transaction statistics for current user
-    
-    Database: Transactions table
-    - Counts transactions by status
-    - Calculates total spent
     """
     return {
         "total_transactions": 10,
@@ -172,33 +152,30 @@ def get_transaction_statistics(current_user: AccountUser = Depends(get_current_u
     }
 
 
-@router.get("/settings", response_model=SettingsRead)
+@router.get("/settings/system", response_model=SettingsRead)
 def get_settings():
     """
     Get system settings
-    
-    Database: Settings table
-    - Retrieves settings like service fee percentage
     """
     return {
-        "service_fee_percentage": Decimal("5.0"),
-        "max_active_posts": 10
+        "setting_id": 1,
+        "setting_name": "service_fee_percentage",
+        "setting_value": Decimal("5.0"),
+        "description": "System default fee",
+        "updated_at": datetime.utcnow(),
+        "updated_by": None
     }
 
 
-@router.put("/settings", response_model=dict)
+@router.put("/settings/system", response_model=dict)
 def update_settings(
     data: SettingsCreate,
-    current_user: AccountUser = Depends(get_current_user)
+    current_user: Users = Depends(get_current_user)
 ):
     """
     Update system settings (admin only)
-    
-    Database: Settings table
-    - Updates setting_value
-    - Records updated_by and updated_at
     """
     return {
         "message": "Settings updated successfully",
-        "updated_by": current_user
+        "updated_by": current_user.email
     }
