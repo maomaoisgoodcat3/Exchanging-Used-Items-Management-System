@@ -39,21 +39,32 @@ export const authService = {
     return response.json();
   },
 
-  // BỔ SUNG PHẦN QUÊN MẬT KHẨU TẠI ĐÂY
   forgotPassword: async (email: string) => {
     const response = await fetch(`${API_URL}/auth/forgot-password`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ email }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_email: email }), 
     });
 
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.detail || "Không thể gửi yêu cầu khôi phục mật khẩu");
     }
-
     return response.json();
   },
+
+  // THÊM MỚI: API Khôi phục mật khẩu bằng Token
+  resetPassword: async (token: string, newPassword: string) => {
+    const response = await fetch(`${API_URL}/auth/reset-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reset_token: token, new_password: newPassword }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || "Khôi phục mật khẩu thất bại");
+    }
+    return response.json();
+  }
 };
