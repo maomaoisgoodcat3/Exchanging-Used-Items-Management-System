@@ -25,8 +25,8 @@ export default function CampaignsPage() {
   }, [token]);
 
   return (
-    <div className="space-y-6 p-6">
-      <h1 className="text-2xl font-bold">Danh sách chiến dịch</h1>
+    <div className="space-y-6 p-6 flex flex-col md:flex-row items-center justify-between rounded-3xl border bg-white p-6 shadow-sm gap-4">
+      <h1 className="text-2xl text-black font-bold">Danh sách chiến dịch</h1>
       <div className="grid gap-4 md:grid-cols-3">
         {campaigns.map((c) => (
           <div key={c.campaign_id} className="border p-4 rounded-xl shadow-sm bg-white">

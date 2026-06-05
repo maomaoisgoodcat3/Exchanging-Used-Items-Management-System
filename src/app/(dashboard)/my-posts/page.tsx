@@ -61,14 +61,14 @@ export default function MyOrdersPage() {
   return (
     <div className="space-y-6 p-6">
       <section className="rounded-3xl border bg-white p-6 shadow-sm">
-        <h1 className="text-3xl font-bold">Đơn hàng của tôi</h1>
+        <h1 className="text-3xl font-bold text-black">Bài đăng của tôi</h1>
         <div className="mt-6 flex gap-4">
-          <select className="rounded-full border px-4 py-2" onChange={(e) => setStatusFilter(e.target.value)}>
+          <select className="rounded-full border border-slate-200 px-4 py-2 text-black" onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="ALL">Tất cả</option>
             <option value="Pending">Đang xử lý</option>
             <option value="Successful">Thành công</option>
           </select>
-          <input className="w-full rounded-full border px-4 py-2" placeholder="Tìm mã đơn..." onChange={(e) => setSearch(e.target.value)} />
+          <input className="w-full rounded-full border border-slate-200 px-4 py-2 text-black" placeholder="Tìm mã đơn..." onChange={(e) => setSearch(e.target.value)} />
         </div>
       </section>
 

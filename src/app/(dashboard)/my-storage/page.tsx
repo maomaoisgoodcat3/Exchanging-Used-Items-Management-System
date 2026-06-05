@@ -94,7 +94,7 @@ export default function MyStoragePage() {
       {/* Header Section */}
       <section className="flex flex-col md:flex-row items-center justify-between rounded-3xl border bg-white p-6 shadow-sm gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">Kho lưu trữ của tôi</h1>
+          <h1 className="text-3xl font-bold text-slate-900">Kho đồ của tôi</h1>
           <p className="mt-2 text-gray-600">
             Xin chào, <span className="font-semibold text-blue-600">{user?.fullName || user?.email || "Người dùng"}</span>!
           </p>
