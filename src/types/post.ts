@@ -16,7 +16,7 @@ export interface Post {
   title: string;
   description?: string;
   thumbnail_url?: string; // Thay cho image_post_url
-  post_type: PostType;
+  post_category: PostType;
   approval: PostStatus;
   created_at?: string;
   products?: ProductItem[]; // Dữ liệu từ bảng PostProducts liên kết qua Storage

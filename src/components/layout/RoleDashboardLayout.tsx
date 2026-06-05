@@ -104,9 +104,13 @@ export default function RoleDashboardLayout({
 
               {/* Đã xóa khu vực "Chuyển role mock" vì hệ thống giờ dùng dữ liệu phân quyền thật từ API */}
 
-              <button className="w-full px-4 py-3 text-left hover:bg-blue-100 font-medium">
+              <Link 
+                href={`${roleBasePath}/profile`} // Trả lại biến roleBasePath chuẩn của bạn
+                onClick={() => setIsOpen(false)} 
+                className="block w-full px-4 py-3 text-left hover:bg-blue-100 font-medium text-gray-700"
+              >
                 Cài đặt tài khoản
-              </button>
+              </Link>
 
               <button
                 onClick={handleLogout}

@@ -12,7 +12,7 @@ import app.models.posts
 import app.models.transactions
 
 # Import Routers
-from app.api.v1 import upload, auth, users, campaigns, posts, transactions, admin
+from app.api.v1 import upload, auth, users, campaigns, posts, transactions, admin, storage
 
 app = FastAPI(title="UET Marketplace API")
 
@@ -41,7 +41,7 @@ app.include_router(campaigns.router)
 app.include_router(posts.router)
 app.include_router(transactions.router)
 app.include_router(admin.router)
-
+app.include_router(storage.router)
 @app.get("/")
 def root_check():
     return {"message": "UET Marketplace API is running! Frontend is at http://localhost:3000"}

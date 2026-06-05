@@ -9,13 +9,13 @@ import type { Post } from "@/types/post";
 export default function PostsPage() {
   // State tìm kiếm và bộ lọc
   const [search, setSearch] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedPostType, setSelectedPostType] = useState("");
   
   // State dữ liệu bài đăng
   const [posts, setPosts] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  // State quản lý Pop-up (Xem chi tiết & Tạo bài đăng)
+  // State quản lý Pop-up
   const [isCreating, setIsCreating] = useState(false);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
 
@@ -34,11 +34,11 @@ export default function PostsPage() {
     fetchPosts();
   }, []);
 
-  // Logic lọc bài đăng (Search + Category)
+  // Lọc bài đăng theo title và post_type từ DB
   const filtered = posts.filter((p) => {
     const matchSearch = p.title.toLowerCase().includes(search.toLowerCase());
-    const matchCategory = selectedCategory === "" || p.category === selectedCategory;
-    return matchSearch && matchCategory;
+    const matchType = selectedPostType === "" || p.post_category === selectedPostType;
+    return matchSearch && matchType;
   });
 
   return (
@@ -49,18 +49,16 @@ export default function PostsPage() {
 
         <div className="flex w-full md:w-auto gap-3 flex-grow justify-end">
 
-          {/* BỘ LỌC DANH MỤC MỚI THÊM */}
+          {/* BỘ LỌC LOẠI BÀI ĐĂNG (Thay cho Category cũ) */}
           <select
             className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium transition focus:border-cyan-500 focus:bg-white"
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
+            value={selectedPostType}
+            onChange={(e) => setSelectedPostType(e.target.value)}
           >
-            <option value="">Tất cả danh mục</option>
-            {/* Các option này nên khớp với danh mục bạn thiết kế trong form tạo bài */}
-            <option value="Sách vở">Sách vở - Tài liệu</option>
-            <option value="Quần áo">Quần áo</option>
-            <option value="Đồ học tập">Đồ dùng học tập</option>
-            <option value="Khác">Khác</option>
+            <option value="">Tất cả loại bài</option>
+            <option value="Selling">Mua bán</option>
+            <option value="Trading">Trao đổi</option>
+            <option value="Donating">Quyên góp</option>
           </select>
 
           <div className="relative">
@@ -70,24 +68,23 @@ export default function PostsPage() {
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Nhập từ khóa để tìm kiếm..."
+              placeholder="Nhập từ khóa..."
               className="w-full rounded-full border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white"
             />
           </div>
           
           <button 
             onClick={() => setIsCreating(true)}
-            className="inline-flex items-center justify-center rounded-full bg-blue-700 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-600"
+            className="inline-flex items-center justify-center rounded-full bg-blue-700 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-600 whitespace-nowrap"
           >
             + Tạo bài đăng
-            
           </button>
 
           <CreatePostModal 
               isOpen={isCreating} 
-                onClose={() => setIsCreating(false)}
-                onPostCreated={(post) => setPosts((currentPosts) => [post, ...currentPosts])}
-            />
+              onClose={() => setIsCreating(false)}
+              onPostCreated={(post) => setPosts((currentPosts) => [post, ...currentPosts])}
+          />
         </div>
       </div>
 
@@ -98,11 +95,8 @@ export default function PostsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {filtered.map((post) => (
             <PostCard 
-              key={post.id} 
+              key={post.post_id} 
               post={post} 
-              // Khi bấm "Xem chi tiết", hàm này sẽ chạy, 
-              // lấy dữ liệu bài đăng đó nhét vào state selectedPost để mở Modal
-              
               onClick={() => setSelectedPost(post)}
             />
           ))} 
@@ -114,45 +108,41 @@ export default function PostsPage() {
         </div>
       )}
 
-
-{/* ============================================================== */}
-{/* 4. POP-UP (MODAL) GIAO DIỆN XEM CHI TIẾT BÀI ĐĂNG (ĐỒNG BỘ GIỎ HÀNG) */}
-{/* ============================================================== */}
+      {/* ============================================================== */}
+      {/* 4. POP-UP (MODAL) GIAO DIỆN XEM CHI TIẾT BÀI ĐĂNG */}
+      {/* ============================================================== */}
       {selectedPost && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 md:p-10 transition-opacity duration-300">
           
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl h-full md:h-[85vh] flex flex-col md:flex-row overflow-hidden relative animate-fadeIn">
             
-            
-            {/* ------------------- CỘT TRÁI: HÌNH ẢNH ------------------- */}
+            {/* CỘT TRÁI: HÌNH ẢNH */}
             <div className="w-full md:w-3/5 bg-gray-100 flex flex-col items-center justify-center p-4 border-b md:border-b-0 md:border-r border-gray-200 relative">
               <img 
-                src={selectedPost.image || selectedPost.images?.[0]} 
+                // Sử dụng thumbnail_url từ DB, nếu null thì dùng ảnh mặc định
+                src={selectedPost.thumbnail_url || "https://placehold.co/600x400?text=No+Image"} 
                 alt={selectedPost.title} 
                 className="w-full h-full object-contain rounded-lg"
               />
-              <div className="absolute bottom-4 left-4 flex gap-2">
-                 <div className="w-16 h-16 border-2 border-blue-500 rounded-md bg-white p-1 shadow-md">
-                    <img src={selectedPost.image || selectedPost.images?.[0]} alt="thumb" className="w-full h-full object-cover rounded" />
-                 </div>
-              </div>
             </div>
 
-            {/* ------------------- CỘT PHẢI: THÔNG TIN CHI TIẾT ------------------- */}
+            {/* CỘT PHẢI: THÔNG TIN CHI TIẾT */}
             <div className="w-full md:w-2/5 flex flex-col h-full bg-white">
               
               {/* Header */}
               <div className="p-4 border-blue-200 shadow-md flex items-center justify-between bg-blue-100/50">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gray-200 border flex items-center justify-center text-lg font-bold text-gray-500">
-                    {selectedPost.sellerName.charAt(0)}
+                  <div className="w-10 h-10 rounded-full bg-blue-200 border flex items-center justify-center text-lg font-bold text-blue-700 uppercase">
+                    {selectedPost.seller_email.charAt(0)}
                   </div>
                   <div>
-                    <p className="font-bold text-s text-gray-800">{selectedPost.sellerName}</p>
-                    <p className="text-xs text-gray-500">📍 {selectedPost.location}</p>
+                    <p className="font-bold text-sm text-gray-800">{selectedPost.seller_email}</p>
+                    <p className="text-xs text-gray-500">📅 {selectedPost.created_at ? new Date(selectedPost.created_at).toLocaleDateString("vi-VN") : "Chưa rõ"}</p>
                   </div>
                 </div>
-                <span className="text-xs text-blue-500 bg-white-900 px-2 py-0.5 rounded">ID: {selectedPost.id}</span>
+                <span className="text-xs text-blue-500 bg-white px-2 py-0.5 rounded shadow-sm border border-blue-100">
+                  ID: {selectedPost.post_id}
+                </span>
               </div>
 
               {/* Content chính */}
@@ -164,15 +154,15 @@ export default function PostsPage() {
                     {selectedPost.title}
                   </h2>
                   <div className="flex items-center gap-3 flex-wrap">
-                    <span className={`px-3 py-1 rounded-full text-sm font-semibold ${typeColor[selectedPost.type]}`}>
-                       {selectedPost.type}
+                    <span className={`px-3 py-1 rounded-full text-sm font-semibold ${typeColor?.[selectedPost.post_category] || "bg-gray-100 text-gray-700"}`}>
+                       {selectedPost.post_category}
                     </span>
-                    <span className="text-sm px-3 py-1 rounded-full bg-gray-100 text-gray-700 font-medium">
-                       📂 {selectedPost.category}
+                    <span className={`px-3 py-1 rounded-full text-sm font-semibold ${selectedPost.approval === "Approved" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>
+                       Trạng thái: {selectedPost.approval}
                     </span>
-                    {selectedPost.campaignName && (
+                    {selectedPost.campaign_id && (
                        <span className="text-sm px-3 py-1 rounded-full bg-pink-100 text-pink-700 font-semibold border border-pink-200">
-                          🚩 {selectedPost.campaignName}
+                          🚩 Chiến dịch #{selectedPost.campaign_id}
                        </span>
                     )}
                   </div>
@@ -192,23 +182,24 @@ export default function PostsPage() {
                    {selectedPost.products && selectedPost.products.length > 0 ? (
                       <div className="space-y-3">
                          {selectedPost.products.map(product => (
-                            <div key={product.id} className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-100 hover:border-blue-200 hover:shadow-sm transition-all shadow-sm">
+                            <div key={product.product_id} className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-100 hover:border-blue-200 hover:shadow-sm transition-all shadow-sm">
                                <div>
-                                  <p className="font-semibold text-sm text-gray-800">{product.name}</p>
-                                  <p className="text-xs text-gray-500 mt-0.5">Số lượng: {product.quantity}</p>
+                                  <p className="font-semibold text-sm text-gray-800">{product.product_name}</p>
+                                  <p className="text-xs text-gray-500 mt-0.5">Số lượng: {product.product_quantity}</p>
                                </div>
                                <div className="flex items-center gap-4">
                                   <div className="text-right">
-                                     {selectedPost.type === "MUA_BAN" ? (
-                                        <p className="font-bold text-blue-600 text-base">{product.price.toLocaleString('vi-VN')} đ</p>
+                                     {selectedPost.post_category === "Selling" ? (
+                                        <p className="font-bold text-blue-600 text-base">
+                                          {Number(product.product_price).toLocaleString('vi-VN')} đ
+                                        </p>
                                      ) : (
                                         <p className="font-bold text-green-600">0 đ</p>
                                      )}
                                   </div>
                                   
-                                  {/* ĐỒNG BỘ: Tất cả đều là Thêm vào giỏ */}
                                   <button 
-                                     onClick={() => alert(`Đã thêm ${product.name} vào giỏ hàng!`)}
+                                     onClick={() => alert(`Đã thêm ${product.product_name} vào giỏ hàng!`)}
                                      className="bg-blue-100 text-blue-700 hover:bg-blue-600 hover:text-white px-3 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm"
                                   >
                                      + Thêm
@@ -219,18 +210,19 @@ export default function PostsPage() {
                       </div>
                    ) : (
                       <div className="text-center py-6 bg-gray-50 rounded-xl border border-dashed text-gray-500 text-sm">
-                         (Giả lập: Bài đăng này chưa có danh sách vật phẩm)
+                         Bài đăng này hiện chưa đính kèm vật phẩm nào.
                       </div>
                    )}
                 </div>
               </div>
 
-              {/* 3. Footer: ĐỒNG BỘ NÚT CHO TẤT CẢ CÁC LOẠI BÀI ĐĂNG */}
-              <div className="p-4 border-blue-100 bg-white mt-auto">
-                 <div className="grid grid-cols-2 gap-3"
-                 onClick={() => setSelectedPost(null)}>
-                    <button className="py-3 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition">
-                       
+              {/* Footer */}
+              <div className="p-4 border-t border-blue-100 bg-white mt-auto">
+                 <div className="grid grid-cols-2 gap-3">
+                    <button 
+                      onClick={() => setSelectedPost(null)}
+                      className="py-3 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition"
+                    >
                        ❌ Thoát
                     </button>
                     <button 
@@ -238,7 +230,6 @@ export default function PostsPage() {
                        className="py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition shadow-md flex items-center justify-center gap-2"
                     >
                        🛒 Xem giỏ hàng
-                       <span className="bg-white text-blue-600 px-2 py-0.5 rounded-full text-xs font-black">2</span>
                     </button>
                  </div>
               </div>
