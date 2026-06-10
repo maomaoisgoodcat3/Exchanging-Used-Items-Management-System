@@ -25,6 +25,7 @@ export default function LoginPage() {
     try {
       // 1. Gọi API đăng nhập thật tới FastAPI (cổng 8000)
       const data = await authService.login(email, password);
+      console.log("Dữ liệu từ API:", data);
       
       // 2. Lưu Token và User vào Global Store & LocalStorage
       const loggedInUser = data.user || { email, role: "MEMBER" };
@@ -52,10 +53,10 @@ export default function LoginPage() {
             Chào mừng bạn đến với
           </h1>
           <h2 className="mt-2 text-xl font-semibold text-gray-800">
-            Nền tảng trao đổi đồ cũ UET
+            Nền tảng UET Marketplace
           </h2>
           <p className="mt-2 text-sm text-gray-500">
-            Đăng nhập bằng tài khoản thật để tiếp tục
+            Đăng nhập bằng tài khoản để tiếp tục
           </p>
         </div>
 
@@ -74,7 +75,7 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Nhập email đã đăng ký..."
-              className="w-full rounded-lg border bg-gray-50 p-3 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="w-full rounded-lg border border-slate-200 bg-gray-50 p-3 outline-none text-black autofill:text-black focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               required
             />
           </div>
@@ -87,7 +88,7 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Nhập mật khẩu..."
-              className="w-full rounded-lg border bg-gray-50 p-3 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="w-full rounded-lg border border-slate-200 bg-gray-50 p-3 outline-none text-black autofill:text-black focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               required
             />
           </div>

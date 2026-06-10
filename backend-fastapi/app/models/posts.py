@@ -61,9 +61,9 @@ class Posts(Base):
     campaign_id = Column(Integer, ForeignKey("Campaigns.campaign_id"), nullable=True)
     title = Column(String(200), nullable=False)
     description = Column(Text)
-    thumbnail_url = Column(String(500)) # ĐÃ SỬA THÀNH THUMBNAIL_URL TẠI ĐÂY
+    thumbnail_url = Column(String(500))
     post_category = Column(Enum(PostCategoryEnum), nullable=False)
-    approval = Column(Enum(CampaignApprovalEnum), default=CampaignApprovalEnum.Pending)
+    approval = Column(Enum(PostApprovalStatus), default=PostApprovalStatus.Pending)
     availability = Column(Enum(PostAvailabilityStatus), default=PostAvailabilityStatus.Open)
     reviewed_by = Column(String(100), ForeignKey("Users.email"))
     reviewed_at = Column(TIMESTAMP, onupdate=func.now())

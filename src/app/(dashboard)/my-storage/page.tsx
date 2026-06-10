@@ -164,9 +164,9 @@ export default function MyStoragePage() {
 
       {/* MODAL THÊM VẬT PHẨM */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 text-black">
           <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl animate-fadeIn">
-            <div className="border-b px-6 py-4 flex justify-between items-center">
+            <div className="border-b border-slate-200 px-6 py-4 flex justify-between items-center">
               <h2 className="text-xl font-bold text-gray-800">Thêm vật phẩm mới</h2>
               <button 
                 onClick={() => setIsAddModalOpen(false)}
@@ -183,7 +183,7 @@ export default function MyStoragePage() {
                   name="product_name"
                   required
                   placeholder="Ví dụ: Sách Toán Cao Cấp"
-                  className="w-full rounded-lg border px-4 py-2 outline-none focus:border-blue-500" 
+                  className="w-full rounded-lg border border-slate-200 px-4 py-2 outline-none focus:border-blue-500" 
                 />
               </div>
               
@@ -192,11 +192,12 @@ export default function MyStoragePage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Danh mục</label>
                   <select 
                     name="product_category_id" 
-                    className="w-full rounded-lg border px-4 py-2 bg-white outline-none focus:border-blue-500"
+                    className="w-full rounded-lg border border-slate-200 px-4 py-2 bg-white outline-none focus:border-blue-500"
                   >
                     <option value="1">Dụng cụ học tập</option>
                     <option value="2">Quần áo</option>
                     <option value="3">Đồ dùng</option>
+                    <option value="4">Khác</option>
                   </select>
                 </div>
                 <div>
@@ -207,7 +208,7 @@ export default function MyStoragePage() {
                     min="1"
                     defaultValue="1"
                     required
-                    className="w-full rounded-lg border px-4 py-2 outline-none focus:border-blue-500" 
+                    className="w-full rounded-lg border border-slate-200 px-4 py-2 outline-none focus:border-blue-500" 
                   />
                 </div>
               </div>
@@ -220,7 +221,7 @@ export default function MyStoragePage() {
                   min="0"
                   defaultValue="0"
                   required
-                  className="w-full rounded-lg border px-4 py-2 outline-none focus:border-blue-500" 
+                  className="w-full rounded-lg border border-slate-200 px-4 py-2 outline-none focus:border-blue-500" 
                 />
               </div>
 
@@ -229,12 +230,12 @@ export default function MyStoragePage() {
                 <input 
                   name="location"
                   required
-                  placeholder="Ví dụ: Tủ sách cá nhân, Ngăn kéo số 2..."
-                  className="w-full rounded-lg border px-4 py-2 outline-none focus:border-blue-500 bg-blue-50/30" 
+                  placeholder="Ví dụ: KTX Ngoại ngữ, Nhà G2 phòng 101,..."
+                  className="w-full rounded-lg border border-slate-200 px-4 py-2 outline-none focus:border-blue-500 bg-blue-50/30" 
                 />
               </div>
 
-              <div className="mt-6 flex justify-end gap-3 pt-4 border-t">
+              <div className="mt-6 flex justify-end gap-3 pt-4 border-t border-slate-200">
                 <button 
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}

@@ -3,10 +3,11 @@ from fastapi import APIRouter, HTTPException, status, Depends, Query
 from typing import Optional, List
 from decimal import Decimal
 from datetime import datetime
+from pydantic import BaseModel
 
 from app.schemas.post_schema import (
-    PostCreate, PostUpdate, PostRead, PostDetailRead, PostListRead,
-    PostFilter, PostApprovalAction, PostProductCreate, PostImageCreate
+    PostUpdate, PostRead, PostDetailRead, PostListRead,
+    PostFilter, PostApprovalAction, PostImageCreate
 )
 from sqlalchemy.orm import Session
 from app.core.database import get_db
@@ -14,40 +15,52 @@ from app.services.auth_svc import get_current_user
 
 # Sử dụng Models chuẩn xác của chúng ta
 from app.models.users import Users
-from app.models.posts import Posts, PostProducts, ProductImages, Storage, ProductImages
+from app.models.posts import Posts, PostCategoryEnum, PostApprovalStatus, PostAvailabilityStatus, PostProducts, ProductImages, Storage, ProductImages
 
 router = APIRouter(prefix="/api/v1/posts", tags=["Posts"])
 
 # ==========================================
-# 1. API LẤY DANH SÁCH BÀI VIẾT
+# 1. PYDANTIC SCHEMAS (Định dạng dữ liệu)
 # ==========================================
 
-@router.get("/", response_model=list)
-def list_posts(
-    post_type: Optional[str] = None,
-    limit: int = 20,
-    skip: int = 0,
-    db: Session = Depends(get_db)
-):
-    """API CHO USER THƯỜNG (Chỉ lấy bài đã duyệt)"""
-    query = db.query(Posts).filter(Posts.approval == "Approved")
-    if post_type:
-        query = query.filter(Posts.post_type == post_type)
-        
-    posts = query.order_by(Posts.created_at.desc()).offset(skip).limit(limit).all()
+class PostResponse(BaseModel):
+    post_id: int
+    title: str
+    description: str | None = None
+    campaign_id: int | None = None
+    seller_email: str
+    thumbnail_url: str | None = None
+    created_at: datetime | None = None
+
+    post_category: PostCategoryEnum
+    approval: PostApprovalStatus
+    availability: PostAvailabilityStatus
     
-    return [{
-        "post_id": p.post_id,
-        "title": p.title,
-        "description": p.description,
-        "seller_email": p.seller_email,
-        "post_type": p.post_type.value if hasattr(p.post_type, 'value') else str(p.post_type),
-        "approval": "Approved", 
-        "availability": p.availability.value if hasattr(p.availability, 'value') else str(p.availability)
-    } for p in posts]
+    reviewed_at: datetime | None = None
+    reviewed_by: str | None = None
+    reject_reason: str | None = None
+
+    class Config:
+        from_attributes = True
+
+# ==========================================
+# 2. CORE API ENDPOINTS
+# ==========================================
+
+@router.get("/", response_model=list[PostResponse])
+def list_posts(
+    db: Session = Depends(get_db),
+    current_user: Users = Depends(get_current_user)
+):
+    return (
+        db.query(Posts)
+        .filter(Posts.approval == PostApprovalStatus.Approved)
+        .order_by(Posts.created_at.desc())
+        .all()
+    )
 
 
-@router.get("/admin-all", response_model=list)
+@router.get("/admin-all", response_model=list[PostResponse])
 def get_all_posts_admin(
     db: Session = Depends(get_db),
     current_user: Users = Depends(get_current_user)
@@ -57,41 +70,34 @@ def get_all_posts_admin(
     if "Admin" not in role_val:
         raise HTTPException(status_code=403, detail="Chỉ Admin mới có quyền xem toàn bộ bài viết.")
         
-    posts = db.query(Posts).order_by(Posts.created_at.desc()).all()
-    return [{
-        "post_id": p.post_id,
-        "title": p.title,
-        "description": p.description,
-        "seller_email": p.seller_email,
-        "post_type": p.post_type.value if hasattr(p.post_type, 'value') else str(p.post_type),
-        "approval": p.approval.value if hasattr(p.approval, 'value') else str(p.approval),
-        "availability": p.availability.value if hasattr(p.availability, 'value') else str(p.availability),
-        "reject_reason": getattr(p, 'reject_reason', None)
-    } for p in posts]
-
-
-@router.get("/my-posts", response_model=list)
-def get_my_posts(
-    db: Session = Depends(get_db), 
-    current_user: Users = Depends(get_current_user)
-):
-    """API CHO NGƯỜI ĐĂNG BÀI (Lấy mọi bài của chính họ)"""
-    posts = db.query(Posts).filter(Posts.seller_email == current_user.email).order_by(Posts.created_at.desc()).all()
-    return [{
-        "post_id": p.post_id,
-        "title": p.title,
-        "description": p.description,
-        "seller_email": p.seller_email,
-        "post_type": p.post_type.value if hasattr(p.post_type, 'value') else str(p.post_type),
-        "approval": p.approval.value if hasattr(p.approval, 'value') else str(p.approval),
-        "availability": p.availability.value if hasattr(p.availability, 'value') else str(p.availability),
-        "reject_reason": getattr(p, 'reject_reason', None)
-    } for p in posts]
-
+    return (
+        db.query(Posts)
+        .order_by(Posts.created_at.desc())
+        .all()
+    )
 
 # ==========================================
 # 2. API THAO TÁC (TẠO, SỬA, XÓA, DUYỆT)
 # ==========================================
+
+# Định nghĩa Sub-Model đại diện cho cấu trúc của bảng PostProducts
+class PostProductCreate(BaseModel):
+    product_id: int
+    product_quantity: int = 1
+
+# Model chính đại diện cho toàn bộ dữ liệu bài đăng mới
+class PostCreate(BaseModel):
+    title: str
+    post_category: str  # Hoặc PostCategoryEnum nếu bạn có sẵn Enum
+    description: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    campaign_id: Optional[int] = None
+    
+    # Danh sách các sản phẩm đính kèm bài viết này
+    products: List[PostProductCreate]
+
+    class Config:
+        from_attributes = True
 
 @router.post("/", response_model=dict, status_code=status.HTTP_201_CREATED)
 def create_post(
@@ -99,61 +105,72 @@ def create_post(
     db: Session = Depends(get_db),
     current_user: Users = Depends(get_current_user)
 ):
-    """Tạo bài đăng mới & Tự động lưu sản phẩm vào Kho đồ (Storage)"""
-    if not data.title or not data.description:
-        raise HTTPException(status_code=400, detail="Title and description are required")
+    try:
+        """Tạo bài đăng mới & Tự động lưu sản phẩm vào Kho đồ (Storage)"""
+        if not data.title or not data.description:
+            raise HTTPException(status_code=400, detail="Title and description are required")
+        
+        # 1. Tạo bảng Post chính
+        new_post = Posts(
+            seller_email=current_user.email,
+            campaign_id=data.campaign_id,
+            title=data.title,
+            description=data.description,
+            post_category=data.post_category, 
+            approval="Pending",
+            availability="Open"
+        )
+        db.add(new_post)
+        db.flush() # Để lấy post_id
+
+        # 2. Xử lý Sản phẩm: Lưu vào Storage (Kho đồ) trước, sau đó Link vào PostProduct
+        if data.products:
+            for prod in data.products:
+                post_product = PostProducts(
+                    post_id=new_post.post_id,         # Lấy ID vừa được sinh từ bước 1
+                    product_id=prod.product_id,
+                    product_quantity=prod.product_quantity
+                )
+                db.add(post_product)
+                db.flush() # Để lấy product_id vừa sinh ra
+                
+                # Tạo liên kết vào bảng trung gian
+                # new_prod_link = PostProducts(
+                #     post_id=new_post.post_id,
+                #     product_id=post_product.product_id
+                # )
+                # db.add(new_prod_link)
+
+        # 3. Xử lý Images
+        # if data.images:
+        #     for img in data.images:
+        #         new_img = ProductImages(
+        #             post_id=new_post.post_id,
+        #             image_url=img.image_url
+        #         )
+        #         db.add(new_img)
+
+        db.commit()
+        db.refresh(new_post)
+        
+        return {
+            "post_id": new_post.post_id,
+            "title": new_post.title,
+            "description": new_post.description,
+            "thumbnail_url": new_post.thumbnail_url,
+            "post_category": new_post.post_category,
+            "approval": new_post.approval,
+            "availability": new_post.availability,
+            "reject_reason": new_post.reject_reason,
+            "created_at": new_post.created_at.isoformat() if new_post.created_at is not None else None
+        }
     
-    # 1. Tạo bảng Post chính
-    new_post = Posts(
-        seller_email=current_user.email,
-        campaign_id=data.campaign_id,
-        title=data.title,
-        description=data.description,
-        post_type=data.post_type, 
-        approval="Pending",
-        availability="Open"
-    )
-    db.add(new_post)
-    db.flush() # Để lấy post_id
-
-    # 2. Xử lý Sản phẩm: Lưu vào Storage (Kho đồ) trước, sau đó Link vào PostProduct
-    if data.products:
-        for prod in data.products:
-            new_storage_item = Storage(
-                email=current_user.email,
-                product_name=prod.product_name,
-                product_category_id=prod.product_category_id,
-                product_quantity=prod.product_quantity,
-                product_price=prod.product_price,
-                product_location_id=1 # Mặc định tạm thời, cần nối với Location thực tế sau
-            )
-            db.add(new_storage_item)
-            db.flush() # Để lấy product_id vừa sinh ra
-            
-            # Tạo liên kết vào bảng trung gian
-            new_prod_link = PostProducts(
-                post_id=new_post.post_id,
-                product_id=new_storage_item.product_id
-            )
-            db.add(new_prod_link)
-
-    # 3. Xử lý Images
-    if data.images:
-        for img in data.images:
-            new_img = ProductImages(
-                post_id=new_post.post_id,
-                image_url=img.image_url
-            )
-            db.add(new_img)
-
-    db.commit()
-    
-    return {
-        "message": "Post created successfully!",
-        "post_id": new_post.post_id,
-        "status": new_post.approval
-    }
-
+    except Exception as e:
+        db.rollback() # Hoàn tác (Xóa bỏ) mọi thứ đã làm nếu xảy ra bất kỳ lỗi nào trong quá trình chạy
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail=f"Lỗi hệ thống khi phân tách dữ liệu: {str(e)}"
+        )
 
 @router.post("/{post_id}/approve", response_model=dict)
 def approve_post(
@@ -172,15 +189,15 @@ def approve_post(
         raise HTTPException(status_code=404, detail="Không tìm thấy bài viết")
 
     if data.action == "approve":
-        post.approval = "Approved"
-        post.availability = "Open"
+        post.approval = PostApprovalStatus.Approved
+        post.availability = PostAvailabilityStatus.Open
         post.reject_reason = None 
     elif data.action == "reject":
-        post.approval = "Rejected"
-        post.availability = "Closed" 
+        post.approval = PostApprovalStatus.Rejected
+        post.availability = PostAvailabilityStatus.Closed
         post.reject_reason = data.reject_reason or "Vi phạm quy định cộng đồng"
     elif data.action == "resend":
-        post.approval = "Resending"
+        post.approval = PostApprovalStatus.Resending
 
     post.reviewed_by = current_user.email
     post.reviewed_at = datetime.utcnow()
@@ -217,64 +234,104 @@ def toggle_post_status(
     }
 
 
-@router.post("/{post_id}/mark-sold", response_model=dict)
-def mark_post_sold(
+@router.post("/{post_id}/mark-closed", response_model=dict)
+def mark_post_closed(
     post_id: int,
+    db: Session = Depends(get_db),
     current_user: Users = Depends(get_current_user)
 ):
-    """Mark post as sold (Giữ nguyên Mock Data)"""
-    return {
-        "message": "Post marked as sold",
-        "post_id": post_id,
-        "status": "Sold"
-    }
+    """Mark post as closed"""
+    post = db.query(Posts)\
+    .filter(Posts.post_id == post_id)\
+    .first()
+
+    if not post:
+        raise HTTPException(status_code=404)
+
+    post.availability = "Closed"
+
+    db.commit()
+    db.refresh(post)
+
+    return post
 
 
 @router.put("/{post_id}", response_model=dict)
 def update_post(
     post_id: int,
     data: PostUpdate,
+    db: Session = Depends(get_db),
     current_user: Users = Depends(get_current_user)
 ):
-    """Update post information (Giữ nguyên Mock Data)"""
-    return {
-        "message": "Post updated successfully",
-        "post_id": post_id
-    }
+    post = db.query(Posts)\
+    .filter(Posts.post_id == post_id)\
+    .first()
+
+    if not post:
+        raise HTTPException(status_code=404)
+
+    if post.seller_email != current_user.email:
+        raise HTTPException(status_code=403)
+
+    update_data = data.model_dump(exclude_unset=True)
+
+    for field, value in update_data.items():
+        setattr(post, field, value)
+
+    db.commit()
+    db.refresh(post)
+
+    return post
 
 
 @router.delete("/{post_id}", response_model=dict)
-def delete_post(post_id: int, current_user: Users = Depends(get_current_user)):
-    """Delete a post (Giữ nguyên Mock Data)"""
+def delete_post(
+    post_id: int,
+    db: Session = Depends(get_db),
+    current_user: Users = Depends(get_current_user)
+):
+    """Delete a post"""
+    post = db.query(Posts)\
+    .filter(Posts.post_id == post_id)\
+    .first()
+
+    if not post:
+        raise HTTPException(status_code=404)
+
+    if post.seller_email != current_user.email:
+        raise HTTPException(status_code=403)
+
+    db.delete(post)
+    db.commit()
+
     return {
-        "message": "Post deleted successfully",
+        "message": "Deleted successfully",
         "post_id": post_id
     }
 
 
 # ==========================================
-# 3. API CHI TIẾT VÀ TÀI NGUYÊN (MOCK DATA)
+# 3. API CHI TIẾT
 # ==========================================
 
 @router.get("/{post_id}", response_model=PostDetailRead)
-def get_post_detail(post_id: int):
-    """Get detailed information of a specific post (Mock data bổ sung field)"""
-    return {
-        "post_id": post_id,
-        "title": "Used Laptop",
-        "description": "Excellent condition laptop for sale",
-        "post_type": "Selling",
-        "availability": "Open",
-        "approval": "Approved",
-        "seller_email": "seller@uet.edu.vn",
-        "campaign_id": None,
-        "created_at": "2024-05-31T15:39:31",
-        "reviewed_by": None,
-        "reviewed_at": None,
-        "reject_reason": None,
-        "products": [],
-        "images": []
-    }
+def get_post_detail(
+    post_id: int,
+    db: Session = Depends(get_db)
+):
+    post = (
+        db.query(Posts)
+        .filter(Posts.post_id == post_id)
+        .first()
+    )
+
+    if not post:
+        raise HTTPException(
+            status_code=404,
+            detail="Không tìm thấy bài viết"
+        )
+
+    return post
 
 
 @router.get("/{post_id}/products", response_model=List[dict])
@@ -321,14 +378,3 @@ def remove_image_from_post(
     current_user: Users = Depends(get_current_user)
 ):
     return {"message": "Image removed successfully", "post_id": post_id, "image_id": image_id}
-
-
-@router.get("/{post_id}/similar", response_model=list)
-def get_similar_posts(post_id: int, limit: int = 10):
-    return [{
-        "post_id": 2,
-        "title": "Used Computer",
-        "post_type": "Selling",
-        "approval": "Approved",
-        "availability": "Open"
-    }]

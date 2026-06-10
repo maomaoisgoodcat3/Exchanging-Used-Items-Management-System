@@ -47,19 +47,19 @@ export default function RoleDashboardLayout({
   const navItems = useMemo(() => {
     if (activeRole === "ADMIN") {
       return [
-        { href: `${roleBasePath}/posts`, label: "📝 Posts" },
-        { href: `${roleBasePath}/campaigns`, label: "🔖 Campaigns" },
-        { href: `${roleBasePath}/notifications`, label: "🛡️ Moderation" },
+        { href: `${roleBasePath}/posts`, label: "Posts" },
+        { href: `${roleBasePath}/campaigns`, label: "Campaigns" },
+        { href: `${roleBasePath}/notifications`, label: "Moderation" },
       ];
     }
 
     return [
-      { href: `${roleBasePath}/posts`, label: "📝 Posts" },
-      { href: `${roleBasePath}/my-posts`, label: "🗂️ My Posts" },
-      { href: `${roleBasePath}/my-storage`, label: "🗄️ My Storage" },
-      { href: `${roleBasePath}/campaigns`, label: "🔖 Campaigns" },
-      { href: `${roleBasePath}/my-orders`, label: "🛍️ My orders" },
-      { href: `${roleBasePath}/notifications`, label: "📮 Notifications" },
+      { href: `${roleBasePath}/posts`, label: "Posts" },
+      { href: `${roleBasePath}/my-posts`, label: "My Posts" },
+      { href: `${roleBasePath}/my-storage`, label: "My Storage" },
+      { href: `${roleBasePath}/campaigns`, label: "Campaigns" },
+      { href: `${roleBasePath}/my-orders`, label: "My orders" },
+      { href: `${roleBasePath}/notifications`, label: "Notifications" },
     ];
   }, [activeRole, roleBasePath]);
 
@@ -93,7 +93,7 @@ export default function RoleDashboardLayout({
           {isOpen && (
             <div className="absolute right-0 z-50 mt-2 w-72 rounded-lg bg-white shadow-lg">
               <div className="border-b p-4">
-                <p className="font-medium">{user?.fullName ?? "Người dùng"}</p>
+                <p className="font-medium text-black">{user?.fullName ?? "Người dùng"}</p>
                 <p className="text-sm text-gray-500">
                   {user?.email ?? "Đang tải..."}
                 </p>

@@ -58,7 +58,7 @@ export default function CreatePostModal({
       const newPost: Post = {
         post_id: 0, // Truyền số 0 cho số nguyên (INT)
         title: String(formData.get("title") ?? ""),
-        post_type: String(formData.get("type") ?? "Selling") as any,
+        post_category: String(formData.get("type") ?? "Selling") as any,
         description: String(formData.get("description") ?? ""),
         seller_email: user.email,
         campaign_id: campaignId ? parseInt(campaignId) : null,
