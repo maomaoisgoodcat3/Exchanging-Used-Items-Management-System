@@ -3,13 +3,13 @@ from fastapi import APIRouter, HTTPException, status, Depends, Query
 from typing import Optional, List
 from decimal import Decimal
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field
 
 from app.schemas.post_schema import (
     PostUpdate, PostRead, PostDetailRead, PostListRead,
     PostFilter, PostApprovalAction, PostImageCreate
 )
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.core.database import get_db
 from app.services.auth_svc import get_current_user
 
@@ -39,6 +39,63 @@ class PostResponse(BaseModel):
     reviewed_at: datetime | None = None
     reviewed_by: str | None = None
     reject_reason: str | None = None
+
+    class Config:
+        from_attributes = True
+
+# Định nghĩa Sub-Model đại diện cho cấu trúc của bảng PostProducts
+class PostProductCreate(BaseModel):
+    product_id: int
+    product_quantity: int = 1
+
+# Model chính đại diện cho toàn bộ dữ liệu bài đăng mới
+class PostCreate(BaseModel):
+    title: str
+    post_category: str  # Hoặc PostCategoryEnum nếu bạn có sẵn Enum
+    description: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    campaign_id: Optional[int] = None
+    
+    # Danh sách các sản phẩm đính kèm bài viết này
+    products: List[PostProductCreate]
+
+    class Config:
+            from_attributes = True
+
+# Schema hiển thị thông tin sản phẩm đi kèm bài đăng
+class PostProductRead(BaseModel):
+    product_id: int
+    product_quantity: int
+
+    # Trích xuất dữ liệu động từ quan hệ `product` (bảng Storage gốc)
+    @computed_field
+    def product_name(self) -> str:
+        if hasattr(self, "product") and self.product:
+            return getattr(self.product, "product_name", "Vật phẩm không rõ tên")
+        return "Vật phẩm không rõ tên"
+
+    @computed_field
+    def product_price(self) -> Decimal:
+        if hasattr(self, "product") and self.product:
+            return getattr(self.product, "product_price", Decimal("0.00"))
+        return Decimal("0.00")
+
+    class Config:
+        from_attributes = True # Pydantic v2 (Nếu dùng Pydantic v1 thì đổi thành orm_mode = True)
+
+# Schema hiển thị chi tiết bài đăng
+class PostDetailRead(BaseModel):
+    post_id: int
+    title: str
+    description: Optional[str] = None
+    post_category: str
+    approval: str
+    seller_email: str
+    thumbnail_url: Optional[str] = None
+    campaign_id: Optional[int] = None
+    created_at: Optional[datetime] = None
+
+    products: List[PostProductRead] = []
 
     class Config:
         from_attributes = True
@@ -79,25 +136,6 @@ def get_all_posts_admin(
 # ==========================================
 # 2. API THAO TÁC (TẠO, SỬA, XÓA, DUYỆT)
 # ==========================================
-
-# Định nghĩa Sub-Model đại diện cho cấu trúc của bảng PostProducts
-class PostProductCreate(BaseModel):
-    product_id: int
-    product_quantity: int = 1
-
-# Model chính đại diện cho toàn bộ dữ liệu bài đăng mới
-class PostCreate(BaseModel):
-    title: str
-    post_category: str  # Hoặc PostCategoryEnum nếu bạn có sẵn Enum
-    description: Optional[str] = None
-    thumbnail_url: Optional[str] = None
-    campaign_id: Optional[int] = None
-    
-    # Danh sách các sản phẩm đính kèm bài viết này
-    products: List[PostProductCreate]
-
-    class Config:
-        from_attributes = True
 
 @router.post("/", response_model=dict, status_code=status.HTTP_201_CREATED)
 def create_post(
@@ -321,6 +359,10 @@ def get_post_detail(
 ):
     post = (
         db.query(Posts)
+        .options(
+            joinedload(Posts.products)         # Nạp bảng trung gian PostProducts
+            .joinedload(PostProducts.product)  # Từ bảng trung gian nạp tiếp sang bảng Storage
+        )
         .filter(Posts.post_id == post_id)
         .first()
     )
@@ -330,6 +372,12 @@ def get_post_detail(
             status_code=404,
             detail="Không tìm thấy bài viết"
         )
+    
+    if post.products:
+        for p in post.products:
+            print(f"--> Kiểm tra liên kết: ID={p.product_id}, Quan hệ product={p.product}")
+            if p.product:
+                print(f"----> Tên sản phẩm thật trong DB: {p.product.product_name}")
 
     return post
 
