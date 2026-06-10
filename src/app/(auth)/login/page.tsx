@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-// Đã xóa import mock data cũ, dùng trực tiếp store thật
 import { useAuthStore } from "@/store/authStore";
 import { authService } from "@/services/auth.service";
 
@@ -11,7 +10,6 @@ export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuthStore();
   
-  // Thêm state để người dùng tự nhập Email & Password thật
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -23,19 +21,21 @@ export default function LoginPage() {
     setIsLoading(true);
     
     try {
-      // 1. Gọi API đăng nhập thật tới FastAPI (cổng 8000)
+      // 1. Gọi API đăng nhập thật tới FastAPI
       const data = await authService.login(email, password);
       
-      // 2. Lưu Token và User vào Global Store & LocalStorage
-      const loggedInUser = data.user || { email, role: "MEMBER" };
+      // 2. Lấy thông tin user (dựa trên cấu trúc Backend mới trả về)
+      const loggedInUser = data.user || { email, role: data.role || "MEMBER" };
+      
+      // 3. Lưu Token và User vào Zustand (Sẽ tự động lưu luôn vào LocalStorage)
       login(data.access_token, loggedInUser);
       
-      // 3. Điều hướng đúng layout theo role thật
-      const role = loggedInUser.role?.toUpperCase();
-      if (role === "ADMIN") {
-        router.push("/admin/posts");
+      // 4. Điều hướng layout chuẩn xác theo role
+      const role = String(loggedInUser.role).toUpperCase();
+      if (role.includes("ADMIN")) {
+        router.push("/admin/dashboard"); // ĐÃ CHỈNH SỬA: Chuyển về Dashboard tổng quan
       } else {
-        router.push("/user/posts");
+        router.push("/user/posts"); // User thường thì vào Chợ chung
       }
     } catch (error: any) {
       setErrorMsg(error.message || "Sai email hoặc mật khẩu. Vui lòng thử lại!");

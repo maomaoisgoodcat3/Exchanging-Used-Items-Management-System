@@ -12,7 +12,7 @@ from app.core.database import get_db
 from app.services.auth_svc import get_current_user
 from app.models.users import Users, Organizations, OrganizationMembers
 from app.models.campaigns import Campaigns
-
+from app.models.posts import Posts
 try:
     from app.core.security import SECRET_KEY, ALGORITHM
 except ImportError:
@@ -80,13 +80,26 @@ def list_campaigns(request: Request, org_email: Optional[str] = None, db: Sessio
         org = db.query(Organizations).filter(Organizations.org_email == c.org_email).first()
         reason = getattr(c, 'reject_reason', getattr(c, 'rejection_reason', None))
         
+        # ========================================================
+        # [MỚI] TRUY VẤN DB THẬT ĐỂ ĐẾM SỐ LƯỢNG BÀI ĐĂNG VÀ NGƯỜI THAM GIA
+        # ========================================================
+        total_posts = db.query(Posts).filter(Posts.campaign_id == c.campaign_id).count()
+        total_participants = db.query(Posts.seller_email).filter(Posts.campaign_id == c.campaign_id).distinct().count()
+        
         result.append({
-            "campaign_id": c.campaign_id, "org_email": c.org_email, "org_name": org.org_name if org else "Unknown",
-            "title": c.title, "description": desc,
+            "campaign_id": c.campaign_id, 
+            "org_email": c.org_email, 
+            "org_name": org.org_name if org else "Unknown",
+            "title": c.title, 
+            "description": desc,
             "start_date": c.start_date.isoformat() if c.start_date else None,
             "end_date": c.end_date.isoformat() if hasattr(c, 'end_date') and c.end_date else None,
-            "approval": approval_val, "availability": getattr(c, 'availability', 'Closed'),
-            "thumbnail_url": img_url, "reject_reason": reason
+            "approval": approval_val, 
+            "availability": getattr(c, 'availability', 'Closed'),
+            "thumbnail_url": img_url, 
+            "reject_reason": reason,
+            "total_posts": total_posts,               # <-- Dữ liệu thật
+            "total_participants": total_participants  # <-- Dữ liệu thật
         })
     return result
 

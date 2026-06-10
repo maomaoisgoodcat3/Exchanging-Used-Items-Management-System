@@ -1,7 +1,6 @@
+import { redirect } from "next/navigation";
+
 export default function Home() {
-  return (
-    <main>
-      <h1>Ứng dụng trao đổi/quyên góp/thanh lý đồ cũ trường X</h1>
-    </main>
-  );
+  // Tự động đá người dùng sang trang đăng nhập khi truy cập root
+  redirect("/login");
 }

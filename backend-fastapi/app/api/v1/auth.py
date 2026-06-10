@@ -95,7 +95,7 @@ def register_user(data: UserRegister, db: Session = Depends(get_db)):
 
 @router.post("/login")
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    """Đăng nhập lấy JWT Token (Sử dụng OAuth2 Form cho Frontend và Swagger)"""
+    """Đăng nhập lấy JWT Token và thông tin User đi kèm"""
     user = db.query(Users).filter(Users.email == form_data.username).first()
     
     if not user or not verify_password(form_data.password, user.password_hash):
@@ -108,12 +108,21 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     access_token = create_access_token(data={"sub": user.email})
     refresh_token = create_access_token(data={"sub": user.email, "type": "refresh"}, expires_delta=timedelta(days=7))
     
-    # Trả về cả access và refresh token để tương thích với Frontend của team bạn
+    # Lấy giá trị chuỗi của role từ Enum hoặc thuộc tính DB
+    user_role = user.role.value if hasattr(user.role, 'value') else str(user.role)
+    
+    # Trả về cấu trúc nested 'user' khớp hoàn toàn với kiểu dữ liệu của Frontend
     return {
         "access_token": access_token, 
         "refresh_token": refresh_token,
         "token_type": "bearer",
-        "user_email": user.email
+        "user_email": user.email,
+        "user": {
+            "email": user.email,
+            "name": user.name,
+            "phone": user.phone,
+            "role": user_role
+        }
     }
 
 

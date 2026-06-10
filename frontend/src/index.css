@@ -1,7 +1,0 @@
-@import "tailwindcss";
-
-body {
-  margin: 0;
-  font-family: "Segoe UI", "Inter", sans-serif;
-  background: linear-gradient(135deg, #f0f9ff 0%, #fefce8 50%, #f0fdf4 100%);
-}

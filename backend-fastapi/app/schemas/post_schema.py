@@ -81,6 +81,7 @@ class PostBase(BaseModel):
     description: Optional[str] = None
     post_type: str = Field(pattern="^(Selling|Trading|Donating)$")
     campaign_id: Optional[int] = None
+    thumbnail_url: Optional[str] = None
 
 class PostCreate(PostBase):
     seller_email: EmailStr
@@ -136,7 +137,7 @@ class PostListRead(BaseModel):
     availability: str
     seller_email: EmailStr
     created_at: datetime
-    image_url: Optional[str] = None
+    thumbnail_url: Optional[str] = None
     campaign_id: Optional[int] = None
 
     class Config:

@@ -37,20 +37,47 @@ def get_admin_user(current_user: Users = Depends(get_current_user)):
 # ==========================================
 
 @router.get("/dashboard", response_model=dict)
-def get_admin_dashboard(admin: Users = Depends(get_admin_user)):
+def get_admin_dashboard(
+    db: Session = Depends(get_db), 
+    admin: Users = Depends(get_admin_user)
+):
     """
-    Get admin dashboard statistics (Giữ nguyên Mock Data tạm thời)
+    Get admin dashboard statistics (DỮ LIỆU THỰC TẾ TỪ SQL DATABASE)
     """
-    return {
-        "total_users": 1500,
-        "total_posts": 350,
-        "total_campaigns": 12,
-        "total_transactions": 280,
-        "total_revenue": Decimal("50000.00"),
-        "pending_posts": 15,
-        "pending_campaigns": 3
-    }
+    # 1. Thống kê tổng sản lượng hệ thống
+    total_users = db.query(Users).count()
+    total_posts = db.query(Posts).count()
+    total_campaigns = db.query(Campaigns).count()
+    
+    # 2. Thống kê các mục đang chờ xử lý (Pending)
+    pending_posts_count = db.query(Posts).filter(Posts.approval == "Pending").count()
+    pending_campaigns_count = db.query(Campaigns).filter(Campaigns.approval == "Pending").count()
+    
+    # 3. Lấy danh sách các bài viết đang chờ duyệt mới nhất để hiện ở bảng Dashboard
+    pending_posts_list = db.query(Posts).filter(Posts.approval == "Pending").order_by(Posts.created_at.desc()).limit(5).all()
+    
+    recent_items = []
+    for p in pending_posts_list:
+        result__val = p.post_category.value if hasattr(p.post_category, 'value') else str(p.post_category)
+        recent_items.append({
+            "id": p.post_id,
+            "type": "POST",
+            "title": p.title,
+            "sender": p.seller_email,
+            "category": result__val,
+            "created_at": p.created_at.isoformat() if p.created_at else None
+        })
 
+    return {
+        "stats": {
+            "total_users": total_users,
+            "total_posts": total_posts,
+            "total_campaigns": total_campaigns,
+            "pending_posts": pending_posts_count,
+            "pending_campaigns": pending_campaigns_count,
+        },
+        "recent_pending_queue": recent_items
+    }
 
 @router.get("/posts/pending", response_model=List[dict])
 def get_pending_posts(
@@ -232,3 +259,33 @@ def update_user_role(
     """
     if role not in ["Member", "Admin"]:
         raise
+
+
+@router.get("/admin-all", response_model=list)
+def list_all_posts_for_admin(
+    limit: int = 100,
+    skip: int = 0,
+    db: Session = Depends(get_db),
+    current_user: Users = Depends(get_current_user)
+):
+    """API DÀNH RIÊNG CHO ADMIN: Lấy tất cả bài viết (Pending, Approved, Rejected...) để kiểm duyệt"""
+    if "Admin" not in str(current_user.role):
+        raise HTTPException(status_code=403, detail="Chỉ Admin mới có quyền truy cập API này!")
+        
+    posts = db.query(Posts).order_by(Posts.created_at.desc()).offset(skip).limit(limit).all()
+    
+    result = []
+    for p in posts:
+        result.append({
+            "post_id": p.post_id,
+            "title": p.title,
+            "description": p.description,
+            "post_category": p.post_category.value if hasattr(p.post_category, 'value') else str(p.post_category),
+            "approval": p.approval.value if hasattr(p.approval, 'value') else str(p.approval),
+            "seller_email": p.seller_email,
+            "created_at": p.created_at.isoformat() if p.created_at else None,
+            "thumbnail_url": p.thumbnail_url,
+            "campaign_id": p.campaign_id,
+            "reject_reason": p.reject_reason
+        })
+    return result
