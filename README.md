@@ -44,6 +44,10 @@ This is an application for exchanging/donating/selling used items at financially
  ┃   ┗ 📜 index.ts
  ┣ 📜 tailwind.config.ts  # Cấu hình màu sắc, animation cơ bản
  ┗ 📜 package.json
+Run Frontend:
++ npm install
++ npm run dev
+
 ```
 ## Backend
 ```
@@ -88,8 +92,10 @@ To turn up this project, try:
 ## Diagram
 ### Context diagram
 <img width="816" height="545" alt="Project-Context diagram drawio" src="https://github.com/user-attachments/assets/9114d863-4b43-4dbe-b527-8c0692da7331" />
+
 ### DFD level 0
 <img width="1203" height="577" alt="Project-DFD level 1 drawio" src="https://github.com/user-attachments/assets/b26647b1-9617-4a87-9484-2811f604162e" />
+
 ### Entity relationship diagram
 <img width="975" height="760" alt="image" src="https://github.com/user-attachments/assets/215e2ce6-ddb2-4a5a-be47-fafc51fd95e8" />
 
