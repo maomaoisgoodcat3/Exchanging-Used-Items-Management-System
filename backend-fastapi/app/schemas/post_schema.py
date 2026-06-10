@@ -128,6 +128,9 @@ class PostRead(PostBase):
 class PostDetailRead(PostRead):
     products: List[PostProductDetailRead]
     images: List[PostImageRead]
+    product_name: str
+    product_price: Decimal
+    product_quantity: int
 
 class PostListRead(BaseModel):
     post_id: int

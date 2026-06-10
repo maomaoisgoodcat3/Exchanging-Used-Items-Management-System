@@ -1,212 +1,192 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useAuthStore } from "@/store/authStore";
+import { UploadCloud, X as XIcon, Image as ImageIcon } from "lucide-react";
 
-// Cấu trúc dữ liệu bài đăng
 interface PostItem {
-  post_id: number;
-  title: string;
-  description: string;
-  thumbnail_url?: string;
-  post_category: string;
-  approval: string;
-  availability: string;
-  campaign_id?: number | null;
-  reject_reason?: string;
-  created_at: string;
+  post_id: number;
+  title: string;
+  description: string;
+  thumbnail_url?: string;
+  post_category: string;
+  approval: string;
+  availability: string;
+  campaign_id?: number | null;
+  reject_reason?: string;
+  created_at: string;
 }
 
-// Cấu trúc dữ liệu sản phẩm lấy từ MyStorage
 interface StorageItem {
-  product_id: number;
-  product_name: string;
-  product_category_id: number;
-  product_quantity: number;
-  product_price: number;
-  product_location_id: number;
+  product_id: number;
+  product_name: string;
+  product_category_id: number;
+  product_quantity: number;
+  product_price: number;
+  product_location_id: number;
 }
 
 const approvalStyles: Record<string, string> = {
-  Pending: "bg-yellow-100 text-yellow-800",
-  Approved: "bg-emerald-100 text-emerald-800",
-  Rejected: "bg-red-100 text-red-800",
-  Resending: "bg-amber-100 text-amber-800"
+  Pending: "bg-yellow-100 text-yellow-800",
+  Approved: "bg-emerald-100 text-emerald-800",
+  Rejected: "bg-red-100 text-red-800",
+  Resending: "bg-amber-100 text-amber-800"
 };
 
 const approvalLabels: Record<string, string> = {
-  Pending: "Chờ phê duyệt",
-  Approved: "Đã duyệt",
-  Rejected: "Bị từ chối",
-  Resending: "Đang gửi lại"
+  Pending: "Chờ phê duyệt",
+  Approved: "Đã duyệt",
+  Rejected: "Bị từ chối",
+  Resending: "Đang gửi lại"
 };
 
 export default function MyPostsPage() {
-  const { user } = useAuthStore();
-  const [posts, setPosts] = useState<PostItem[]>([]);
-  const [storageItems, setStorageItems] = useState<StorageItem[]>([]); 
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { user, token } = useAuthStore();
+  const [posts, setPosts] = useState<PostItem[]>([]);
+  const [storageItems, setStorageItems] = useState<StorageItem[]>([]); 
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  // MẢNG CHỨA CÁC ID SẢN PHẨM ĐƯỢC CHỌN (Multi-select)
-  const [selectedProductIds, setSelectedProductIds] = useState<number[]>([]);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // MẢNG CHỨA CÁC ID SẢN PHẨM ĐƯỢC CHỌN
+  const [selectedProductIds, setSelectedProductIds] = useState<number[]>([]);
+  const selectedProductsDetails = storageItems.filter((item) =>
+    selectedProductIds.includes(item.product_id)
+  );
 
-  // Lọc lấy danh sách các Object sản phẩm tương ứng với mảng ID đã chọn
-  const selectedProductsDetails = storageItems.filter((item) =>
-    selectedProductIds.includes(item.product_id)
-  );
+  // STATE QUẢN LÝ UPLOAD ẢNH
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingImg, setIsUploadingImg] = useState(false);
+  const [thumbnailUrl, setThumbnailUrl] = useState("");
 
-  const refreshPostList = async () => {
-    try {
-      const token = localStorage.getItem("access_token");
-      if (!token) return;
+  const refreshPostList = async () => {
+    try {
+      if (!token) return;
+      const [postsRes, storageRes] = await Promise.all([
+          fetch("http://127.0.0.1:8000/api/v1/my-posts", {
+            headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+          }),
+          fetch("http://127.0.0.1:8000/api/v1/storage", {
+            headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+          }),
+      ]);
 
-      const [postsRes, storageRes] = await Promise.all([
-          fetch("http://127.0.0.1:8000/api/v1/my-posts", {
-            headers: {
-              "Authorization": `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          }),
-          fetch("http://127.0.0.1:8000/api/v1/storage", {
-            headers: {
-              "Authorization": `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          }),
-        ]);
+      if (postsRes.ok && storageRes.ok) {
+         setPosts(await postsRes.json());
+         setStorageItems(await storageRes.json());
+      } else {
+         setError("Không thể đồng bộ dữ liệu từ hệ thống.");
+      }
+    } catch (err) {
+      console.error("Lỗi đồng bộ danh sách bài viết:", err);
+    }
+  };
 
-        if (!postsRes.ok || !storageRes.ok) {
-          throw new Error("Không thể tải dữ liệu hệ thống.");
-        }
-    } catch (err) {
-      console.error("Lỗi đồng bộ danh sách bài viết:", err);
-    }
-  };
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        if (!token) {
+           setError("Vui lòng đăng nhập để xem thông tin.");
+           setIsLoading(false);
+           return;
+        }
+        await refreshPostList();
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchData();
+  }, [token]);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        refreshPostList();
+  // HÀM XỬ LÝ UPLOAD ẢNH THẬT
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-        const token = localStorage.getItem("access_token");
-        if (!token) return setError("Vui lòng đăng nhập để xem thông tin.");
+    setIsUploadingImg(true);
+    const formData = new FormData();
+    formData.append("file", file); // Field name "file" khớp với chuẩn FastAPI UploadFile
 
-        const [postsRes, storageRes] = await Promise.all([
-          fetch("http://127.0.0.1:8000/api/v1/my-posts", {
-            headers: {
-              "Authorization": `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          }),
-          fetch("http://127.0.0.1:8000/api/v1/storage", {
-            headers: {
-              "Authorization": `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          }),
-        ]);
+    try {
+      // Gọi API upload (Thay bằng endpoint thật của backend bạn nếu có tên khác)
+      const res = await fetch("http://127.0.0.1:8000/api/v1/upload", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}` },
+        body: formData,
+      });
 
-        if (!postsRes.ok || !storageRes.ok) {
-          throw new Error("Không thể tải dữ liệu hệ thống.");
-        }
+      if (!res.ok) {
+        alert("Có lỗi xảy ra khi tải ảnh lên server.");
+        return;
+      }
 
-        const postsData = await postsRes.json();
-        const storageData = await storageRes.json();
-        console.log(postsData);
-        setPosts(postsData);
-        setStorageItems(storageData);
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+      const data = await res.json();
+      // Server trả về { url: "..." } hoặc { file_url: "..." }
+      setThumbnailUrl(data.url || data.file_url || data.image_url || "");
+    } catch (err) {
+      console.error("Lỗi upload ảnh:", err);
+      alert("Lỗi kết nối khi tải ảnh.");
+    } finally {
+      setIsUploadingImg(false);
+    }
+  };
 
-    fetchData();
-  }, []);
+  const handleCreatePost = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (selectedProductIds.length === 0) {
+      alert("Vui lòng chọn ít nhất một sản phẩm từ kho đồ!");
+      return;
+    }
 
-  // Hàm xử lý khi chọn thêm một sản phẩm từ dropdown
-  const handleSelectProduct = (productId: number) => {
-    if (!productId) return;
-    if (!selectedProductIds.includes(productId)) {
-      setSelectedProductIds((prev) => [...prev, productId]);
-    }
-  };
+    setIsSubmitting(true);
+    const formData = new FormData(e.currentTarget);
+    const campaignVal = formData.get("campaign_id");
 
-  // Hàm xử lý gỡ bỏ sản phẩm khỏi danh sách chọn
-  const handleRemoveProduct = (productId: number) => {
-    setSelectedProductIds((prev) => prev.filter((id) => id !== productId));
-  };
+    const formattedProducts = selectedProductIds.map((id) => ({
+      product_id: id,
+      product_quantity: 1, 
+    }));
 
-  const handleCreatePost = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    
-    // Ngăn chặn tạo bài đăng trống không có sản phẩm
-    if (selectedProductIds.length === 0) {
-      alert("Vui lòng chọn ít nhất một sản phẩm từ kho đồ!");
-      return;
-    }
+    const newPost = {
+      title: String(formData.get("title")),
+      post_category: String(formData.get("post_category")),
+      description: String(formData.get("description")),
+      thumbnail_url: thumbnailUrl, // Sử dụng URL ảnh đã upload thay vì text input
+      campaign_id: campaignVal ? Number(campaignVal) : null,
+      products: formattedProducts,
+    };
 
-    setIsSubmitting(true);
-    const formData = new FormData(e.currentTarget);
-    const campaignVal = formData.get("campaign_id");
+    try {
+      const res = await fetch("http://127.0.0.1:8000/api/v1/my-posts", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(newPost),
+      });
 
-    // 1. Định dạng mảng ID thành mảng Object đúng cấu trúc của bảng PostProducts
-    const formattedProducts = selectedProductIds.map((id) => ({
-      product_id: id,
-      product_quantity: 1, // Mặc định số lượng là 1 theo thiết kế DB của bạn
-    }));
+      if (!res.ok) {
+        const errorData = await res.json();
+        alert(errorData.detail?.[0]?.msg || errorData.detail || "Không thể xử lý bài đăng.");
+        return;
+      }
 
-    // 2. Gom tất cả thông tin lại thành 1 payload duy nhất
-    const newPost = {
-      title: String(formData.get("title")),
-      post_category: String(formData.get("post_category")),
-      description: String(formData.get("description")),
-      thumbnail_url: String(formData.get("thumbnail_url")) || null,
-      campaign_id: campaignVal ? Number(campaignVal) : null,
-      products: formattedProducts, // Đưa vào mảng sản phẩm đính kèm
-    };
+      alert("Đã tạo bài đăng và đính kèm vật phẩm thành công!");
+      setIsAddModalOpen(false);
+      setSelectedProductIds([]);
+      setThumbnailUrl(""); // Reset ảnh
+      refreshPostList(); 
+    } catch (err: any) {
+      alert("Lỗi kết nối, không thể gửi yêu cầu.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
-    try {
-      const token = localStorage.getItem("access_token");
-      
-      const res = await fetch("http://127.0.0.1:8000/api/v1/my-posts", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(newPost), // Chuyển thành chuỗi JSON gửi đi
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        console.error("Lỗi cấu trúc dữ liệu gửi lên:", errorData);
-        throw new Error(errorData.detail?.[0]?.msg || errorData.detail || "Không thể xử lý bài đăng.");
-      }
-
-      const addedPost = await res.json();
-      
-      // Cập nhật lại danh sách hiển thị trên UI
-      setPosts((prev) => [...prev, addedPost]);
-      setIsAddModalOpen(false);
-      setSelectedProductIds([]); // Dọn sạch danh sách đã chọn
-      alert("Đã phân tách và lưu dữ liệu thành công vào hệ thống!");
-      refreshPostList(); 
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-return (
-    <div className="space-y-6 p-6 relative">
-      {/* Header Section */}
+  return (
+    <div className="space-y-6 relative">
       <section className="flex flex-col md:flex-row items-center justify-between rounded-3xl border bg-white p-6 shadow-sm gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Bài đăng của tôi</h1>
@@ -216,32 +196,25 @@ return (
         </div>
         <button 
           onClick={() => setIsAddModalOpen(true)}
-          className="rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700 shadow-sm"
+          className="rounded-full bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700 shadow-sm"
         >
           + Tạo bài đăng mới
         </button>
       </section>
 
-      {/* Data Section */}
       <section className="rounded-2xl border bg-white p-6 shadow-sm">
         {isLoading ? (
           <div className="flex h-40 items-center justify-center">
             <p className="text-gray-500 animate-pulse font-medium">Đang tải danh sách bài đăng...</p>
           </div>
         ) : error ? (
-          <div className="flex h-40 items-center justify-center text-red-500 font-medium">
+          <div className="flex h-40 items-center justify-center text-red-500 font-medium bg-red-50 rounded-xl">
             <p>{error}</p>
           </div>
         ) : posts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12">
             <div className="text-6xl mb-4">📝</div>
             <p className="text-gray-500 mb-4 text-lg">Bạn chưa đăng tải bài viết nào.</p>
-            <button 
-              onClick={() => setIsAddModalOpen(true)}
-              className="rounded-lg bg-gray-100 px-6 py-2 font-medium text-gray-700 hover:bg-gray-200"
-            >
-              Tạo bài đăng đầu tiên
-            </button>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -253,19 +226,18 @@ return (
                   <th className="px-6 py-4 font-semibold">Tiêu đề bài đăng</th>
                   <th className="px-6 py-4 font-semibold">Danh mục</th>
                   <th className="px-6 py-4 font-semibold">Trạng thái</th>
-                  <th className="px-6 py-4 font-semibold">Ngày tạo</th>
-                  <th className="px-6 py-4 font-semibold text-right">Hành động</th>
+                  <th className="px-6 py-4 font-semibold text-right">Ngày tạo</th>
                 </tr>
               </thead>
               <tbody>
                 {posts.map((post) => (
                   <tr key={post.post_id} className="border-b hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 font-medium text-gray-500">#{post.post_id}</td>
+                    <td className="px-6 py-4 font-bold text-gray-900">#{post.post_id}</td>
                     <td className="px-6 py-4">
                       {post.thumbnail_url ? (
                         <img src={post.thumbnail_url} alt="thumbnail" className="w-12 h-12 rounded-lg object-cover border" />
                       ) : (
-                        <div className="w-12 h-12 bg-gray-100 rounded-lg border flex items-center justify-center text-xs text-gray-400">No pic</div>
+                        <div className="w-12 h-12 bg-gray-100 rounded-lg border flex items-center justify-center text-gray-400"><ImageIcon size={16}/></div>
                       )}
                     </td>
                     <td className="px-6 py-4 font-bold text-gray-900 max-w-xs truncate" title={post.title}>
@@ -275,21 +247,16 @@ return (
                       )}
                     </td>
                     <td className="px-6 py-4">
-                      <span className="text-xs bg-indigo-50 text-indigo-700 font-medium px-2 py-1 rounded">
+                      <span className="text-xs bg-indigo-50 text-indigo-700 font-bold px-2 py-1.5 rounded uppercase tracking-wide">
                         {post.post_category}
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${approvalStyles[post.approval] || 'bg-gray-100'}`}>
+                      <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide ${approvalStyles[post.approval] || 'bg-gray-100'}`}>
                         {approvalLabels[post.approval] || post.approval}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-gray-500">{new Date(post.created_at).toLocaleDateString('vi-VN')}</td>
-                    <td className="px-6 py-4 text-right">
-                      <button className="text-blue-600 hover:text-blue-800 hover:underline font-medium">
-                        Sửa
-                      </button>
-                    </td>
+                    <td className="px-6 py-4 text-right text-gray-500">{new Date(post.created_at).toLocaleDateString('vi-VN')}</td>
                   </tr>
                 ))}
               </tbody>
@@ -298,164 +265,105 @@ return (
         )}
       </section>
 
-      {/* MODAL THÊM BÀI ĐĂNG MỚI (HỖ TRỢ NHIỀU SẢN PHẨM) */}
+      {/* MODAL THÊM BÀI ĐĂNG */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 text-black">
-          <div className="w-full max-w-xl rounded-2xl bg-white shadow-2xl animate-fadeIn max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center z-10">
+          <div className="w-full max-w-xl rounded-3xl bg-white shadow-2xl animate-fadeIn max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-slate-100 px-6 py-4 flex justify-between items-center z-10">
               <h2 className="text-xl font-bold text-gray-800">Tạo bài đăng mới</h2>
-              <button 
-                type="button"
-                onClick={() => {
-                  setIsAddModalOpen(false);
-                  setSelectedProductIds([]);
-                }}
-                className="text-gray-400 hover:text-gray-600 text-2xl font-bold"
-              >
-                &times;
-              </button>
+              <button onClick={() => setIsAddModalOpen(false)} className="text-gray-400 hover:text-red-500 transition"><XIcon/></button>
             </div>
 
-            <form onSubmit={handleCreatePost} className="p-6 space-y-4">
+            <form onSubmit={handleCreatePost} className="p-6 space-y-5">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tiêu đề bài đăng</label>
-                <input 
-                  name="title"
-                  required
-                  placeholder="Ví dụ: Thanh lý gói combo đồ dùng học tập cuối kỳ"
-                  className="w-full rounded-lg border border-slate-200 px-4 py-2 outline-none focus:border-blue-500" 
-                />
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Tiêu đề bài đăng</label>
+                <input name="title" required placeholder="Thanh lý combo đồ dùng..." className="w-full rounded-xl border border-slate-200 px-4 py-2.5 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition" />
               </div>
 
-              {/* PHẦN CHỌN NHIỀU SẢN PHẨM TỪ KHO ĐỒ */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Chọn các sản phẩm từ kho của bạn</label>
+              {/* CHỌN SẢN PHẨM TỪ KHO */}
+              <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl space-y-3">
+                <label className="block text-sm font-semibold text-gray-700">🛒 Đính kèm vật phẩm từ kho</label>
                 <select 
                   value=""
-                  onChange={(e) => handleSelectProduct(Number(e.target.value))}
-                  className="w-full rounded-lg border border-slate-200 px-4 py-2 bg-white outline-none focus:border-blue-500"
+                  onChange={(e) => {
+                     const id = Number(e.target.value);
+                     if (id && !selectedProductIds.includes(id)) {
+                        setSelectedProductIds((prev) => [...prev, id]);
+                     }
+                  }}
+                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 bg-white outline-none focus:border-blue-500 font-medium"
                 >
-                  <option value="">-- Bấm vào đây để chọn thêm sản phẩm --</option>
-                  {storageItems.map((item) => {
-                    const isSelected = selectedProductIds.includes(item.product_id);
-                    return (
-                      <option 
-                        key={item.product_id} 
-                        value={item.product_id}
-                        disabled={isSelected} // Ngăn người dùng chọn trùng sản phẩm đã có trong list
-                        className={isSelected ? "text-gray-300" : ""}
-                      >
-                        #{item.product_id} - {item.product_name} {isSelected ? "(Đã chọn)" : `(Tồn: ${item.product_quantity})`}
-                      </option>
-                    );
-                  })}
+                  <option value="">-- Bấm vào đây để chọn vật phẩm --</option>
+                  {storageItems.map((item) => (
+                    <option key={item.product_id} value={item.product_id} disabled={selectedProductIds.includes(item.product_id)}>
+                      #{item.product_id} - {item.product_name} {selectedProductIds.includes(item.product_id) ? "(Đã chọn)" : ""}
+                    </option>
+                  ))}
                 </select>
 
-                {/* HIỂN THỊ CÁC BADGE/TAG SẢN PHẨM ĐÃ CHỌN ĐỂ HỦY NHANH */}
-                {selectedProductIds.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2">
+                {selectedProductsDetails.length > 0 && (
+                  <div className="flex flex-col gap-2 bg-white p-3 rounded-lg border border-slate-200 mt-2">
                     {selectedProductsDetails.map((item) => (
-                      <span 
-                        key={item.product_id}
-                        className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 font-medium px-2.5 py-1 rounded-md text-xs border border-blue-200"
-                      >
-                        {item.product_name}
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveProduct(item.product_id)}
-                          className="text-blue-400 hover:text-blue-600 font-bold ml-1 text-sm focus:outline-none"
-                          title="Xóa khỏi bài viết"
-                        >
-                          &times;
-                        </button>
-                      </span>
+                      <div key={item.product_id} className="flex justify-between items-center bg-slate-50 px-3 py-2 rounded border border-slate-100">
+                         <span className="text-sm font-semibold text-gray-700">{item.product_name}</span>
+                         <div className="flex items-center gap-3">
+                            <span className="text-xs font-bold text-blue-600">{Number(item.product_price).toLocaleString('vi-VN')} đ</span>
+                            <button type="button" onClick={() => setSelectedProductIds(prev => prev.filter(id => id !== item.product_id))} className="text-red-400 hover:text-red-600 font-bold">&times;</button>
+                         </div>
+                      </div>
                     ))}
                   </div>
                 )}
               </div>
-
-              {/* BOX HIỂN THỊ DANH SÁCH CHI TIẾT CÁC SẢN PHẨM ĐÃ CHỌN */}
-              {selectedProductsDetails.length > 0 && (
-                <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 space-y-3 animate-fadeIn text-xs">
-                  <p className="font-bold text-sm text-slate-800 border-b pb-1.5 flex justify-between">
-                    <span>Danh sách chi tiết ({selectedProductsDetails.length} sản phẩm):</span>
-                    <span className="text-blue-600">
-                      Tổng tiền: {selectedProductsDetails.reduce((sum, item) => sum + Number(item.product_price), 0).toLocaleString('vi-VN')} đ
-                    </span>
-                  </p>
-                  <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
-                    {selectedProductsDetails.map((item, idx) => (
-                      <div key={item.product_id} className="flex justify-between items-center bg-white p-2 rounded-lg shadow-sm border border-slate-100">
-                        <div>
-                          <p className="font-semibold text-gray-900">{idx + 1}. {item.product_name} <span className="text-gray-400 font-normal">(#{item.product_id})</span></p>
-                          <p className="text-gray-500">Số lượng hiện có: <span className="font-medium text-gray-800">{item.product_quantity}</span></p>
-                        </div>
-                        <span className="font-bold text-slate-700">{Number(item.product_price).toLocaleString('vi-VN')} đ</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
               
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Loại bài đăng</label>
-                  <select 
-                    name="post_category" 
-                    className="w-full rounded-lg border border-slate-200 px-4 py-2 bg-white outline-none focus:border-blue-500"
-                  >
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Loại bài đăng</label>
+                  <select name="post_category" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 bg-white outline-none focus:border-blue-500">
                     <option value="Selling">Bán hàng</option>
                     <option value="Trading">Trao đổi</option>
                     <option value="Donating">Quyên góp</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Mã chiến dịch (Nếu có)</label>
-                  <input 
-                    name="campaign_id"
-                    type="number"
-                    placeholder="Bỏ trống nếu đăng tự do"
-                    className="w-full rounded-lg border border-slate-200 px-4 py-2 outline-none focus:border-blue-500" 
-                  />
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Mã chiến dịch (Optional)</label>
+                  <input name="campaign_id" type="number" placeholder="Bỏ trống nếu đăng tự do" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 outline-none focus:border-blue-500" />
+                </div>
+              </div>
+
+              {/* TÍNH NĂNG UPLOAD ẢNH API MỚI */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Hình ảnh bài đăng</label>
+                <div className="flex items-center gap-4">
+                   <div 
+                     onClick={() => fileInputRef.current?.click()}
+                     className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-xl cursor-pointer transition ${isUploadingImg ? "bg-gray-100 border-gray-300" : thumbnailUrl ? "bg-white border-blue-200" : "bg-slate-50 border-slate-300 hover:bg-slate-100"}`}
+                   >
+                     {isUploadingImg ? (
+                        <span className="text-sm text-gray-500 animate-pulse font-semibold">Đang tải lên hệ thống...</span>
+                     ) : thumbnailUrl ? (
+                        <div className="w-full h-full relative p-2">
+                           <img src={thumbnailUrl} className="w-full h-full object-contain rounded-lg" alt="Preview"/>
+                        </div>
+                     ) : (
+                        <>
+                           <UploadCloud className="text-gray-400 mb-2" size={28}/>
+                           <span className="text-xs text-gray-500 font-medium">Bấm để chọn file ảnh (.jpg, .png)</span>
+                        </>
+                     )}
+                   </div>
+                   <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleImageUpload}/>
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Link ảnh Thumbnail</label>
-                <input 
-                  name="thumbnail_url"
-                  placeholder="Ví dụ: https://images.com/pic.jpg"
-                  className="w-full rounded-lg border border-slate-200 px-4 py-2 outline-none focus:border-blue-500" 
-                />
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Mô tả nội dung</label>
+                <textarea name="description" rows={3} required placeholder="Nhập thông tin chi tiết..." className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-500 resize-none" />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Mô tả nội dung bài đăng</label>
-                <textarea 
-                  name="description"
-                  rows={3}
-                  required
-                  placeholder="Nhập thông tin chi tiết, tình trạng các sản phẩm hoặc nội dung bài viết..."
-                  className="w-full rounded-lg border border-slate-200 px-4 py-2 outline-none focus:border-blue-500" 
-                />
-              </div>
-
-              <div className="mt-6 flex justify-end gap-3 pt-4 border-t border-slate-200 sticky bottom-0 bg-white">
-                <button 
-                  type="button"
-                  onClick={() => {
-                    setIsAddModalOpen(false);
-                    setSelectedProductIds([]);
-                  }}
-                  className="rounded-lg bg-gray-100 px-5 py-2 font-medium text-gray-700 hover:bg-gray-200"
-                >
-                  Hủy
-                </button>
-                <button 
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="rounded-lg bg-blue-600 px-5 py-2 font-medium text-white hover:bg-blue-700 disabled:bg-blue-400"
-                >
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setIsAddModalOpen(false)} className="rounded-xl bg-gray-100 px-5 py-2.5 font-bold text-gray-600 hover:bg-gray-200">Hủy bỏ</button>
+                <button type="submit" disabled={isSubmitting || isUploadingImg} className="rounded-xl bg-blue-600 px-6 py-2.5 font-bold text-white hover:bg-blue-700 disabled:bg-blue-400">
                   {isSubmitting ? "Đang xử lý..." : "Đăng bài ngay"}
                 </button>
               </div>
