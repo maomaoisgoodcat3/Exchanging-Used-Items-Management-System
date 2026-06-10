@@ -36,7 +36,7 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-blue-100">
+    <div className="flex min-h-screen items-center justify-center bg-blue-100 text-black">
       <div className="w-full max-w-md rounded-xl bg-white p-8 shadow-lg">
         <div className="mb-8 text-center">
           <p className="mt-2 text-xl font-semibold text-gray-800">
@@ -51,7 +51,7 @@ export default function RegisterPage() {
               name="user_email"
               type="email"
               placeholder="Nhập email"
-              className="w-full rounded-lg border p-3 outline-none focus:border-blue-500"
+              className="w-full rounded-lg border border-slate-200 p-3 outline-none focus:border-blue-500"
               required
             />
           </div>
@@ -62,7 +62,7 @@ export default function RegisterPage() {
               name="user_name"
               type="text"
               placeholder="Nhập họ tên"
-              className="w-full rounded-lg border p-3 outline-none focus:border-blue-500"
+              className="w-full rounded-lg border border-slate-200 p-3 outline-none focus:border-blue-500"
               required
             />
           </div>
@@ -73,7 +73,7 @@ export default function RegisterPage() {
               name="phone"
               type="tel"
               placeholder="Nhập số điện thoại"
-              className="w-full rounded-lg border p-3 outline-none focus:border-blue-500"
+              className="w-full rounded-lg border border-slate-200 p-3 outline-none focus:border-blue-500"
               required
             />
           </div>
@@ -84,7 +84,7 @@ export default function RegisterPage() {
               name="password"
               type="password"
               placeholder="Nhập mật khẩu"
-              className="w-full rounded-lg border p-3 outline-none focus:border-blue-500"
+              className="w-full rounded-lg border border-slate-200 p-3 outline-none focus:border-blue-500"
               required
             />
           </div>
@@ -95,7 +95,7 @@ export default function RegisterPage() {
               name="verify_password"
               type="password"
               placeholder="Nhập lại mật khẩu"
-              className="w-full rounded-lg border p-3 outline-none focus:border-blue-500"
+              className="w-full rounded-lg border border-slate-200 p-3 outline-none focus:border-blue-500"
               required
             />
           </div>

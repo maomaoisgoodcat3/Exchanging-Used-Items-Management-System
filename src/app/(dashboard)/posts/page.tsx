@@ -26,9 +26,12 @@ export default function PostsPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
 
-  const fetchLivePosts = async () => {
-    if (!token) return;
-    try {
+  // State Quản lý danh sách sản phẩm riêng cho bài đăng đang được chọn xem chi tiết
+  const [modalProducts, setModalProducts] = useState<any[]>([]);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+
+  useEffect(() => {
+    const fetchPosts = async () => {
       setIsLoading(true);
       
       const userRes = await fetch("http://127.0.0.1:8000/api/v1/users/me", { headers: { Authorization: `Bearer ${token}` } });
@@ -85,20 +88,27 @@ export default function PostsPage() {
     return matchSearch && matchType;
   });
 
+  const handleOpenDetails = async (post: Post) => {
+    setIsLoadingProducts(true);
+    try {
+      // Gọi trực tiếp API chi tiết đã gộp sản phẩm
+      const res = await fetch(`http://127.0.0.1:8000/api/v1/posts/${post.post_id}`);
+      if (res.ok) {
+        const fullPostDetail = await res.json();
+        setSelectedPost(fullPostDetail); // Lúc này selectedPost đã có sẵn mảng .products xịn từ DB
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoadingProducts(false);
+    }
+  };
+
   return (
     <div className="space-y-6 relative">
-      
-      {/* ============================================================== */}
-      {/* 1. GIAO DIỆN MODERATION DÀNH RIÊNG CHO ADMIN (GIỐNG UI MOCKUP) */}
-      {/* ============================================================== */}
-      {isAdmin ? (
-         <div className="space-y-6 animate-in fade-in">
-            {/* Header Title */}
-            <div>
-                <p className="text-sm text-gray-500 font-medium mb-1">Admin layout</p>
-                <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Moderation</h1>
-                <p className="text-gray-500 mt-1">Khu vực duyệt và quản lý thông báo, bài đăng do người dùng gửi.</p>
-            </div>
+      {/* HEADER + SEARCH + NÚT TẠO BÀI ĐĂNG */}
+      <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+        <h1 className="text-2xl font-bold text-gray-800">Danh sách bài đăng</h1>
 
             {/* 3 Thẻ Thống Kê */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -113,28 +123,36 @@ export default function PostsPage() {
                     </div>
                 </div>
 
-                <div className="bg-[#fff1f2] border border-[#ffe4e6] rounded-2xl p-6 flex items-center gap-5 shadow-sm hover:shadow-md transition">
-                    <div className="w-14 h-14 rounded-full bg-[#fb7185] flex items-center justify-center text-white shrink-0 shadow-inner">
-                        <X size={28} strokeWidth={2.5}/>
-                    </div>
-                    <div>
-                        <p className="text-sm font-bold text-gray-700">Bài bị từ chối</p>
-                        <p className="text-4xl font-black text-gray-900">{rejectedPosts.length}</p>
-                        <p className="text-xs text-gray-500 mt-1">Tổng số bài bị từ chối</p>
-                    </div>
-                </div>
+          {/* BỘ LỌC LOẠI BÀI ĐĂNG */}
+          <select
+            className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-black font-medium transition focus:border-cyan-500 focus:bg-white"
+            value={selectedPostType}
+            onChange={(e) => setSelectedPostType(e.target.value)}
+          >
+            <option value="">Tất cả loại bài</option>
+            <option value="Selling">Mua bán</option>
+            <option value="Trading">Trao đổi</option>
+            <option value="Donating">Quyên góp</option>
+          </select>
 
-                <div className="bg-[#f0fdf4] border border-[#dcfce7] rounded-2xl p-6 flex items-center gap-5 shadow-sm hover:shadow-md transition">
-                    <div className="w-14 h-14 rounded-full bg-[#10b981] flex items-center justify-center text-white shrink-0 shadow-inner">
-                        <Check size={28} strokeWidth={2.5}/>
-                    </div>
-                    <div>
-                        <p className="text-sm font-bold text-gray-700">Bài đã duyệt</p>
-                        <p className="text-4xl font-black text-gray-900">{approvedPosts.length}</p>
-                        <p className="text-xs text-gray-500 mt-1">Tổng số bài đã duyệt</p>
-                    </div>
-                </div>
-            </div>
+          <div className="relative">
+            <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+              🔍
+            </span>
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Nhập từ khóa để tìm kiếm..."
+              className="w-full rounded-full border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white"
+            />
+          </div>
+          
+          <button 
+            onClick={() => setIsCreating(true)}
+            className="inline-flex items-center justify-center rounded-full bg-blue-700 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-600 whitespace-nowrap"
+          >
+            + Tạo bài đăng
+          </button>
 
             {/* Bảng Log hành động */}
             <div className="bg-gray-50/50 border border-gray-100 rounded-xl p-4 flex flex-col md:flex-row justify-around text-sm font-semibold text-gray-600 gap-4 shadow-sm">
@@ -148,144 +166,28 @@ export default function PostsPage() {
                 </div>
             </div>
 
-            {/* Bảng Danh sách bài chờ duyệt */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4 bg-gray-50/50">
-                    <h2 className="text-xl font-bold flex items-center gap-2 text-gray-800">📋 Danh sách bài chờ duyệt</h2>
-                    
-                    <div className="flex items-center gap-3 w-full md:w-auto">
-                        <div className="relative flex-1 md:w-64">
-                            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm kiếm tiêu đề, người đăng..." className="w-full rounded-full border border-gray-300 py-2.5 pl-5 pr-10 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition shadow-sm" />
-                            <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-blue-500" size={18}/>
-                        </div>
-                        <select value={adminFilter} onChange={e => setAdminFilter(e.target.value)} className="rounded-full border border-gray-300 py-2.5 px-5 text-sm outline-none focus:border-blue-500 bg-white font-semibold text-gray-700 cursor-pointer shadow-sm">
-                            <option value="Pending">Chờ duyệt</option>
-                            <option value="Approved">Đã duyệt</option>
-                            <option value="Rejected">Đã từ chối</option>
-                            <option value="All">Tất cả bài</option>
-                        </select>
-                        <button onClick={fetchLivePosts} className="w-10 h-10 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-100 transition text-gray-600 shadow-sm bg-white"><RefreshCw size={16}/></button>
-                    </div>
-                </div>
-
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm whitespace-nowrap">
-                        <thead className="bg-white text-slate-500 font-bold border-b border-gray-200 uppercase text-[11px] tracking-wider">
-                            <tr>
-                                <th className="p-4 pl-6">Mã bài</th>
-                                <th className="p-4">Tiêu đề bài đăng</th>
-                                <th className="p-4">Người đăng</th>
-                                <th className="p-4">Loại bài</th>
-                                <th className="p-4">Thời gian gửi</th>
-                                <th className="p-4">Trạng thái</th>
-                                <th className="p-4 pr-6 text-right">Hành động</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100 text-gray-700 font-medium">
-                            {isLoading ? (
-                                <tr><td colSpan={7} className="p-8 text-center text-gray-400">Đang tải dữ liệu...</td></tr>
-                            ) : adminFilteredPosts.length === 0 ? (
-                                <tr><td colSpan={7} className="p-12 text-center text-gray-400">Không có dữ liệu bài đăng.</td></tr>
-                            ) : adminFilteredPosts.map(p => (
-                                <tr key={p.post_id} className="hover:bg-blue-50/30 transition">
-                                    <td className="p-4 pl-6 text-gray-900 font-bold">#{p.post_id}</td>
-                                    <td className="p-4 max-w-[200px] truncate" title={p.title}>{p.title}</td>
-                                    <td className="p-4 text-gray-500">{p.seller_email}</td>
-                                    <td className="p-4"><span className="bg-gray-100 px-2.5 py-1 rounded text-[11px] font-bold text-gray-600 uppercase border border-gray-200">{p.post_category}</span></td>
-                                    <td className="p-4 text-gray-500">{p.created_at ? new Date(p.created_at).toLocaleDateString("vi-VN") : "Hôm nay"}</td>
-                                    <td className="p-4">
-                                        <span className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide border ${
-                                            p.approval === 'Approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
-                                            p.approval === 'Rejected' ? 'bg-rose-50 text-rose-700 border-rose-200' : 
-                                            'bg-amber-50 text-amber-700 border-amber-200'
-                                        }`}>
-                                            {p.approval}
-                                        </span>
-                                    </td>
-                                    <td className="p-4 pr-6 text-right space-x-2">
-                                        {(p.approval === 'Pending' || p.approval === 'Resending') ? (
-                                            <>
-                                                <button onClick={() => handleReviewPost(p.post_id, 'approve')} className="bg-emerald-500 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-emerald-600 transition shadow-sm">Duyệt</button>
-                                                <button onClick={() => handleReviewPost(p.post_id, 'reject')} className="bg-rose-500 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-rose-600 transition shadow-sm">Từ chối</button>
-                                            </>
-                                        ) : (
-                                            <button onClick={() => setSelectedPost(p)} className="bg-white text-blue-600 px-3 py-1.5 rounded text-xs font-bold hover:bg-blue-50 transition border border-blue-200 shadow-sm">Chi tiết</button>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-         </div>
+      {/* KHU VỰC RENDER DANH SÁCH BÀI ĐĂNG */}
+      {isLoading ? (
+        <div className="text-center py-10 text-gray-500">Đang tải dữ liệu từ hệ thống...</div>
       ) : (
-
-      /* ============================================================== */
-      /* 2. GIAO DIỆN CHỢ GIAO DỊCH DÀNH CHO USER THƯỜNG               */
-      /* ============================================================== */
-      <div className="space-y-6 animate-in fade-in">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-            <h1 className="text-2xl font-bold text-gray-800">📰 Danh sách bài đăng</h1>
-
-            <div className="flex w-full md:w-auto gap-3 flex-grow justify-end">
-              <select
-                className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium transition focus:border-cyan-500 focus:bg-white"
-                value={selectedPostType}
-                onChange={(e) => setSelectedPostType(e.target.value)}
-              >
-                <option value="">Tất cả loại bài</option>
-                <option value="Selling">Mua bán</option>
-                <option value="Trading">Trao đổi</option>
-                <option value="Donating">Quyên góp</option>
-              </select>
-
-              <div className="relative">
-                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
-                <input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Nhập từ khóa..."
-                  className="w-full rounded-full border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white"
-                />
-              </div>
-              
-              <button 
-                onClick={() => setIsCreating(true)}
-                className="inline-flex items-center justify-center rounded-full bg-blue-700 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-600 whitespace-nowrap"
-              >
-                + Tạo bài đăng
-              </button>
-
-              <CreatePostModal 
-                  isOpen={isCreating} 
-                  onClose={() => setIsCreating(false)}
-                  onPostCreated={(post) => setPosts((currentPosts) => [post, ...currentPosts])}
-              />
-            </div>
-          </div>
-
-          {isLoading ? (
-            <div className="text-center py-10 text-gray-500">Đang tải dữ liệu từ hệ thống...</div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {userFilteredPosts.map((post) => (
-                <PostCard 
-                  key={post.post_id} 
-                  post={post} 
-                  onClick={() => setSelectedPost(post)}
-                />
-              ))} 
-              {userFilteredPosts.length === 0 && (
-                <div className="col-span-full text-center text-gray-500 py-10 bg-white rounded-xl">Không tìm thấy bài đăng nào.</div>
-              )}
-            </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filtered.map((post) => (
+            <PostCard 
+              key={post.post_id} 
+              post={post} 
+              onClick={() => handleOpenDetails(post)}
+            />
+          ))} 
+          {filtered.length === 0 && (
+             <div className="col-span-full text-center text-gray-500 py-10 bg-white rounded-xl">
+               Không tìm thấy bài đăng nào.
+             </div>
           )}
       </div>
       )}
 
       {/* ============================================================== */}
-      {/* 3. POP-UP (MODAL) GIAO DIỆN XEM CHI TIẾT BÀI ĐĂNG (DÙNG CHUNG) */}
+      {/* POP-UP (MODAL) GIAO DIỆN XEM CHI TIẾT BÀI ĐĂNG */}
       {/* ============================================================== */}
       {selectedPost && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 md:p-10 transition-opacity duration-300">
@@ -312,7 +214,7 @@ export default function PostsPage() {
                   </div>
                   <div>
                     <p className="font-bold text-sm text-gray-800">{selectedPost.seller_email}</p>
-                    <p className="text-xs text-gray-500">📅 {selectedPost.created_at ? new Date(selectedPost.created_at).toLocaleDateString("vi-VN") : "Hôm nay"}</p>
+                    <p className="text-xs text-gray-500">{selectedPost.created_at ? new Date(selectedPost.created_at).toLocaleDateString("vi-VN") : "Chưa rõ"}</p>
                   </div>
                 </div>
                 <span className="text-xs text-blue-500 bg-white px-2 py-0.5 rounded shadow-sm border border-blue-100">
@@ -337,7 +239,7 @@ export default function PostsPage() {
                     </span>
                     {selectedPost.campaign_id && (
                        <span className="text-sm px-3 py-1 rounded-full bg-pink-100 text-pink-700 font-semibold border border-pink-200">
-                          🚩 Chiến dịch #{selectedPost.campaign_id}
+                          Chiến dịch #{selectedPost.campaign_id}
                        </span>
                     )}
                   </div>
@@ -345,7 +247,7 @@ export default function PostsPage() {
 
                 {/* Mô tả */}
                 <div className="space-y-2 border-l-4 border-blue-200 pl-4 bg-blue-50/50 py-3 rounded-r-lg">
-                  <h3 className="text-lg font-semibold text-gray-800">📝 Mô tả chi tiết:</h3>
+                  <h3 className="text-lg font-semibold text-gray-800">Mô tả chi tiết:</h3>
                   <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
                      {selectedPost.description || "Chưa có thông tin mô tả chi tiết cho bài đăng này."}
                   </p>
@@ -361,45 +263,57 @@ export default function PostsPage() {
 
                 {/* Danh sách vật phẩm */}
                 <div>
-                   <h3 className="text-xl font-semibold mb-4 text-gray-900">📦 Danh sách vật phẩm</h3>
-                   {selectedPost.products && selectedPost.products.length > 0 ? (
-                      <div className="space-y-3">
-                         {selectedPost.products.map((product: any) => (
-                            <div key={product.product_id} className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-100 hover:border-blue-200 hover:shadow-sm transition-all shadow-sm">
-                               <div>
-                                  <p className="font-semibold text-sm text-gray-800">{product.product_name}</p>
-                                  <p className="text-xs text-gray-500 mt-0.5">Số lượng: {product.product_quantity}</p>
-                               </div>
-                               <div className="flex items-center gap-4">
-                                  <div className="text-right">
-                                     {(selectedPost.post_category === "Selling") ? (
-                                        <p className="font-bold text-blue-600 text-base">
-                                          {Number(product.product_price).toLocaleString('vi-VN')} đ
-                                        </p>
-                                     ) : (
-                                        <p className="font-bold text-green-600">0 đ</p>
-                                     )}
-                                  </div>
-                                  
-                                  {!isAdmin && (
-                                    <button 
-                                      onClick={() => alert(`Đã thêm ${product.product_name} vào giỏ hàng!`)}
-                                      className="bg-blue-100 text-blue-700 hover:bg-blue-600 hover:text-white px-3 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm"
-                                    >
-                                      + Thêm
-                                    </button>
-                                  )}
-                               </div>
+                  <h3 className="text-xl font-semibold mb-4 text-gray-900">Danh sách vật phẩm</h3>
+                  
+                  {isLoadingProducts ? (
+                    <div className="text-center py-6 text-sm text-gray-400 animate-pulse">
+                      ⏳ Đang tải thông tin chi tiết vật phẩm...
+                    </div>
+                  ) : selectedPost.products && selectedPost.products.length > 0 ? (
+                    <div className="space-y-3">
+                      {selectedPost.products.map((item: any) => (
+                        <div 
+                          key={item.product_id} 
+                          className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-100 hover:border-blue-200 hover:shadow-sm transition-all shadow-sm"
+                        >
+                          <div>
+                            <p className="font-semibold text-sm text-gray-800">
+                              {item.product?.product_name || "Vật phẩm không rõ tên"}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              Số lượng: {item.product_quantity ?? 1}
+                            </p>
+                          </div>
+                          
+                          <div className="flex items-center gap-4">
+                            <div className="text-right">
+                              {selectedPost.post_category === "Selling" ? (
+                                <p className="font-bold text-blue-600 text-base">
+                                  {Number(item.product?.product_price || 0).toLocaleString('vi-VN')} đ
+                                </p>
+                              ) : (
+                                <p className="font-bold text-green-600">0 đ</p>
+                              )}
                             </div>
-                         ))}
-                      </div>
-                   ) : (
-                      <div className="text-center py-6 bg-gray-50 rounded-xl border border-dashed text-gray-500 text-sm">
-                         Bài đăng này hiện chưa đính kèm vật phẩm nào.
-                      </div>
-                   )}
-                </div>
-              </div>
+                            
+                            <button 
+                              onClick={() => alert(`Đã thêm ${item.product?.product_name || 'vật phẩm'} vào giỏ hàng!`)}
+                              className="bg-blue-100 text-blue-700 hover:bg-blue-600 hover:text-white px-3 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm"
+                            >
+                              + Thêm
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 bg-gray-50 rounded-xl border border-dashed text-gray-500 text-sm">
+                      Bài đăng này hiện chưa đính kèm vật phẩm nào.
+                    </div>
+                  )}
+                </div> {/* Đóng div Danh sách vật phẩm */}
+
+              </div> {/* Đóng div phần thân bên trong Modal */}
 
               {/* Footer */}
               <div className="p-4 border-t border-blue-100 bg-white mt-auto">
@@ -408,7 +322,13 @@ export default function PostsPage() {
                       onClick={() => setSelectedPost(null)}
                       className="px-6 py-2.5 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition"
                     >
-                       Đóng lại
+                       Thoát
+                    </button>
+                    <button 
+                       onClick={() => alert("Chuyển sang trang Giỏ hàng để Thanh toán/Chốt đơn!")}
+                       className="py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition shadow-md flex items-center justify-center gap-2"
+                    >
+                       Xem giỏ hàng
                     </button>
                     {!isAdmin && (
                         <button 
@@ -420,11 +340,11 @@ export default function PostsPage() {
                     )}
                  </div>
               </div>
-              
-            </div>
-          </div>
-        </div>
+            </div> {/* Đóng div khung Modal trắng */}
+          </div> {/* Đóng div cố định nền mờ lớp trên */}
+        </div> 
       )}
-    </div>
+
+    </div> // Đóng div chính ngoài cùng của toàn bộ trang PostsPage
   );
 }

@@ -28,7 +28,7 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-blue-100">
+    <div className="flex min-h-screen items-center justify-center bg-blue-100 text-black">
       <div className="w-full max-w-md rounded-xl bg-white p-8 shadow-lg">
         <div className="mb-8 text-center">
           <h2 className="mt-2 text-xl font-semibold text-blue-900">
@@ -45,7 +45,7 @@ export default function ForgotPasswordPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Nhập email của bạn..."
-              className="w-full rounded-lg border p-3 outline-none focus:border-blue-500"
+              className="w-full rounded-lg border border-slate-200 p-3 outline-none focus:border-blue-500"
             />
           </div>
 

@@ -52,10 +52,16 @@ export default function PostCard({ post, onClick }: { post: Post; onClick: () =>
       </div>
 
       {/* Nút bấm */}
-      <div 
-        className="mt-4 pt-3 border-t border-gray-100 text-center text-sm font-semibold text-blue-600 group-hover:text-blue-700 transition-colors">
+      <button 
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation(); // Ngăn chặn xung đột dòng chảy sự kiện
+          onClick();
+        }}
+        className="w-full mt-4 pt-3 border-t border-gray-100 text-center text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors block cursor-pointer"
+      >
         Xem chi tiết &rarr;
-      </div>
+      </button>
     </div>
   );
 }
