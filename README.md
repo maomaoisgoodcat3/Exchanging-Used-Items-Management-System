@@ -1,14 +1,13 @@
 # Exchanging-Used-Items-Management-System
 This is an application for exchanging/donating/selling used items at financially autonomous private schools.
 
----
-
-## Thực hiện bới nhóm sinh viên
-1. Nguyễn Bình An
-2. Lê Minh Anh
-3. Trần Lê Cương
+## Group members
+1. Nguyễn Thị Thanh Hiền
+2. Phạm Hữu Mạnh
+3. Trần Minh Quân
 4. Đỗ Thị Thu Hà
-5. Nguyễn Minh Phúc
+   
+---
    
 ## Frontend
 ```
