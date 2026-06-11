@@ -62,26 +62,31 @@ class PostCreate(BaseModel):
     class Config:
             from_attributes = True
 
+class StorageInPostRead(BaseModel):
+    product_id: int
+    product_name: str
+    product_price: float
+
+    class Config:
+        from_attributes = True
+
 # Schema hiển thị thông tin sản phẩm đi kèm bài đăng
 class PostProductRead(BaseModel):
     product_id: int
     product_quantity: int
-
-    # Trích xuất dữ liệu động từ quan hệ `product` (bảng Storage gốc)
-    @computed_field
-    def product_name(self) -> str:
-        if hasattr(self, "product") and self.product:
-            return getattr(self.product, "product_name", "Vật phẩm không rõ tên")
-        return "Vật phẩm không rõ tên"
-
-    @computed_field
-    def product_price(self) -> Decimal:
-        if hasattr(self, "product") and self.product:
-            return getattr(self.product, "product_price", Decimal("0.00"))
-        return Decimal("0.00")
+    product: Optional[StorageInPostRead] = None
 
     class Config:
         from_attributes = True # Pydantic v2 (Nếu dùng Pydantic v1 thì đổi thành orm_mode = True)
+
+    # Trích xuất dữ liệu động từ quan hệ `product` (bảng Storage gốc)
+    # @computed_field
+    # def product_name(self) -> str:
+    #     return self.product.product_name if self.product else "Vật phẩm không tồn tại trong kho"
+
+    # @computed_field
+    # def product_price(self) -> float:
+    #     return self.product.product_price if self.product else 0.0
 
 # Schema hiển thị chi tiết bài đăng
 class PostDetailRead(BaseModel):

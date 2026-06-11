@@ -62,7 +62,7 @@ export default function AdminDashboardPage() {
       <div className="flex justify-between items-center">
         <div>
           <p className="text-sm text-gray-400 font-semibold uppercase tracking-wider">Hệ thống tổng quan</p>
-          <h1 className="text-3xl font-black text-gray-900 tracking-tight">Bảng Điều Khiển Quản Trị</h1>
+          <h1 className="text-3xl text-black font-bold text-gray-900 tracking-tight">Bảng Điều Khiển Quản Trị</h1>
         </div>
         <button onClick={fetchDashboardData} className="w-10 h-10 rounded-full border border-gray-300 flex items-center justify-center bg-white text-gray-600 hover:bg-gray-50 shadow-sm transition">
           <RefreshCw size={16} />

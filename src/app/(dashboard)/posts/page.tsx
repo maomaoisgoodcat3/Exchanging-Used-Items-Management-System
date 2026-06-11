@@ -70,6 +70,7 @@ export default function PostsPage() {
 
   const handleOpenDetails = async (post: Post) => {
     setIsLoadingProducts(true);
+    setSelectedPost(post);
     try {
       const res = await fetch(`http://127.0.0.1:8000/api/v1/posts/${post.post_id}`);
       if (res.ok) {
@@ -146,7 +147,7 @@ export default function PostsPage() {
 
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
               <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4 bg-gray-50/50">
-                  <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">📋 Danh sách bài chờ duyệt</h2>
+                  <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">Danh sách bài chờ duyệt</h2>
                   <div className="flex items-center gap-3 w-full md:w-auto">
                       <div className="relative flex-1 md:w-64">
                           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm tiêu đề, người đăng..." className="w-full rounded-full border border-gray-300 py-2 pl-4 pr-10 text-sm outline-none focus:border-blue-500 text-gray-900 placeholder-gray-400" />
@@ -215,7 +216,7 @@ export default function PostsPage() {
         /* ---------------- GIAO DIỆN USER THƯỜNG ---------------- */
         <div className="space-y-6 animate-in fade-in">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-            <h1 className="text-2xl font-bold text-gray-800">📰 Danh sách bài đăng</h1>
+            <h1 className="text-2xl font-bold text-gray-800">Danh sách bài đăng</h1>
 
             <div className="flex w-full md:w-auto gap-3 flex-grow justify-end">
               <select
@@ -340,60 +341,60 @@ export default function PostsPage() {
                   </div>
                 )}
 
-                <div>
-                  <h3 className="text-xl font-semibold mb-4 text-gray-900">Danh sách vật phẩm</h3>
+        <div>
+          <h3 className="text-xl font-semibold mb-4 text-gray-900">Danh sách vật phẩm</h3>
+          
+          {isLoadingProducts ? (
+            <div className="text-center py-6 text-sm text-gray-400 animate-pulse">
+              ⏳ Đang tải thông tin chi tiết vật phẩm...
+            </div>
+          ) : (selectedPost?.products && selectedPost.products.length > 0) ? (
+            <div className="space-y-3">
+              {selectedPost.products.map((item: any) => (
+                <div 
+                  key={item.product_id} 
+                  className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-100 hover:border-blue-200 hover:shadow-sm transition-all shadow-sm"
+                >
+                  <div>
+                    <p className="font-semibold text-sm text-gray-800">
+                      {item.product?.product_name || "Vật phẩm không rõ tên"}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Số lượng: {item.product?.product_quantity ?? 1}
+                    </p>
+                  </div>
                   
-                  {isLoadingProducts ? (
-                    <div className="text-center py-6 text-sm text-gray-400 animate-pulse">
-                      ⏳ Đang tải thông tin chi tiết vật phẩm...
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      {selectedPost.post_category === "Selling" ? (
+                        <p className="font-bold text-blue-600 text-base">
+                          {Number(item.product?.product_price || 0).toLocaleString('vi-VN')} đ
+                        </p>
+                      ) : (
+                        <p className="font-bold text-green-600">0 đ</p>
+                      )}
                     </div>
-                  ) : selectedPost.products && selectedPost.products.length > 0 ? (
-                    <div className="space-y-3">
-                      {selectedPost.products.map((item: any) => (
-                        <div 
-                          key={item.product_id} 
-                          className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-100 hover:border-blue-200 hover:shadow-sm transition-all shadow-sm"
-                        >
-                          <div>
-                            {/* ĐÃ SỬA CHUẨN BACKEND SCHEMA TẠI ĐÂY */}
-                            <p className="font-semibold text-sm text-gray-800">
-                              {item.product_name || "Vật phẩm không rõ tên"}
-                            </p>
-                            <p className="text-xs text-gray-500 mt-0.5">
-                              Số lượng: {item.product_quantity ?? 1}
-                            </p>
-                          </div>
-                          
-                          <div className="flex items-center gap-4">
-                            <div className="text-right">
-                              {selectedPost.post_category === "Selling" ? (
-                                <p className="font-bold text-blue-600 text-base">
-                                  {Number(item.product_price || 0).toLocaleString('vi-VN')} đ
-                                </p>
-                              ) : (
-                                <p className="font-bold text-green-600">0 đ</p>
-                              )}
-                            </div>
-                            
-                            {!isAdmin && (
-                                <button 
-                                onClick={() => alert(`Đã thêm ${item.product_name || 'vật phẩm'} vào giỏ hàng!`)}
-                                className="bg-blue-100 text-blue-700 hover:bg-blue-600 hover:text-white px-3 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm"
-                                >
-                                + Thêm
-                                </button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-6 bg-gray-50 rounded-xl border border-dashed text-gray-500 text-sm">
-                      Bài đăng này hiện chưa đính kèm vật phẩm nào.
-                    </div>
-                  )}
+                    
+                    {!isAdmin && (
+                      <button 
+                        onClick={() => alert(`Đã thêm ${item.product_name || 'vật phẩm'} vào giỏ hàng!`)}
+                        className="bg-blue-100 text-blue-700 hover:bg-blue-600 hover:text-white px-3 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm"
+                      >
+                        + Thêm
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-6 bg-gray-50 rounded-xl border border-dashed text-gray-500 text-sm">
+              Bài đăng này hiện chưa đính kèm vật phẩm nào.
+            </div>
+          )}
+        </div>
+      </div>
+
 
               <div className="p-4 border-t border-blue-100 bg-white mt-auto">
                  <div className="flex gap-3 justify-end">
